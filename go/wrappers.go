@@ -2,6 +2,7 @@ package diagnyx
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -75,7 +76,7 @@ func (w *OpenAIWrapper) CreateEmbeddings(ctx context.Context, req openai.Embeddi
 
 	call := LLMCall{
 		Provider:       ProviderOpenAI,
-		Model:          string(req.Model),
+		Model:          fmt.Sprintf("%v", req.Model),
 		Endpoint:       "/v1/embeddings",
 		LatencyMs:      latencyMs,
 		ProjectID:      w.opts.ProjectID,
