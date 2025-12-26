@@ -198,6 +198,7 @@ def track_with_timing(
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -256,4 +257,5 @@ def track_with_timing(
                 raise
 
         return wrapper
+
     return decorator
