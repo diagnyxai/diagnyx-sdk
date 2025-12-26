@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Callable, Optional, TypeVar
 
 from .client import Diagnyx
-from .types import LLMCallData, CallStatus, LLMProvider
+from .types import CallStatus, LLMCallData, LLMProvider
 
 T = TypeVar("T")
 
@@ -198,6 +198,7 @@ def track_with_timing(
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -256,4 +257,5 @@ def track_with_timing(
                 raise
 
         return wrapper
+
     return decorator

@@ -1,6 +1,5 @@
 """Diagnyx client for LLM tracking."""
 
-import asyncio
 import threading
 import time
 from datetime import datetime
@@ -9,10 +8,9 @@ from typing import List, Optional
 import httpx
 
 from .types import (
+    BatchResult,
     DiagnyxConfig,
     LLMCallData,
-    TrackResult,
-    BatchResult,
 )
 
 
@@ -166,12 +164,13 @@ class Diagnyx:
                 last_error = e
                 self._log(f"Attempt {attempt + 1} failed: {e}")
                 if attempt < self.config.max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
         raise last_error or Exception("Failed to send batch")
 
     def _start_flush_timer(self) -> None:
         """Start the background flush timer."""
+
         def timer_callback():
             if self._buffer:
                 try:
@@ -180,10 +179,7 @@ class Diagnyx:
                     self._log(f"Background flush error: {e}")
             self._start_flush_timer()
 
-        self._flush_timer = threading.Timer(
-            self.config.flush_interval_ms / 1000,
-            timer_callback
-        )
+        self._flush_timer = threading.Timer(self.config.flush_interval_ms / 1000, timer_callback)
         self._flush_timer.daemon = True
         self._flush_timer.start()
 
