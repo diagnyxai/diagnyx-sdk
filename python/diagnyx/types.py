@@ -3,11 +3,12 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
 
 
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
@@ -21,6 +22,7 @@ class LLMProvider(str, Enum):
 
 class CallStatus(str, Enum):
     """Status of an LLM call."""
+
     SUCCESS = "success"
     ERROR = "error"
     TIMEOUT = "timeout"
@@ -30,6 +32,7 @@ class CallStatus(str, Enum):
 @dataclass
 class LLMCallData:
     """Data for an LLM call to track."""
+
     provider: LLMProvider
     model: str
     input_tokens: int
@@ -45,11 +48,18 @@ class LLMCallData:
     trace_id: Optional[str] = None
     user_identifier: Optional[str] = None
     timestamp: Optional[datetime] = None
+    # Content capture fields
+    full_prompt: Optional[str] = None
+    """Full prompt content (only captured if capture_full_content=True)"""
+    full_response: Optional[str] = None
+    """Full response content (only captured if capture_full_content=True)"""
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API request."""
         data = {
-            "provider": self.provider.value if isinstance(self.provider, LLMProvider) else self.provider,
+            "provider": self.provider.value
+            if isinstance(self.provider, LLMProvider)
+            else self.provider,
             "model": self.model,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
@@ -76,6 +86,10 @@ class LLMCallData:
             data["user_identifier"] = self.user_identifier
         if self.timestamp:
             data["timestamp"] = self.timestamp.isoformat()
+        if self.full_prompt:
+            data["full_prompt"] = self.full_prompt
+        if self.full_response:
+            data["full_response"] = self.full_response
 
         return data
 
@@ -83,6 +97,7 @@ class LLMCallData:
 @dataclass
 class TrackResult:
     """Result of tracking a call."""
+
     id: str
     cost_usd: float
     total_tokens: int
@@ -91,6 +106,7 @@ class TrackResult:
 @dataclass
 class BatchResult:
     """Result of tracking a batch of calls."""
+
     tracked: int
     total_cost: float
     total_tokens: int
@@ -100,9 +116,15 @@ class BatchResult:
 @dataclass
 class DiagnyxConfig:
     """Configuration for the Diagnyx client."""
+
     api_key: str
     base_url: str = "https://api.diagnyx.io"
     batch_size: int = 100
     flush_interval_ms: int = 5000
     max_retries: int = 3
     debug: bool = False
+    # Content capture options
+    capture_full_content: bool = False
+    """Enable capturing full prompt/response content. Default: False (privacy-first)"""
+    content_max_length: int = 10000
+    """Maximum length for captured content before truncation. Default: 10000"""

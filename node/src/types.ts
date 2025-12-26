@@ -18,6 +18,10 @@ export interface DiagnyxConfig {
   flushIntervalMs?: number;
   maxRetries?: number;
   debug?: boolean;
+  /** Enable capturing full prompt/response content. Default: false (privacy-first) */
+  captureFullContent?: boolean;
+  /** Maximum length for captured content before truncation. Default: 10000 */
+  contentMaxLength?: number;
 }
 
 export interface LLMCallData {
@@ -36,6 +40,10 @@ export interface LLMCallData {
   traceId?: string;
   userIdentifier?: string;
   timestamp?: Date | string;
+  /** Full prompt content (only captured if captureFullContent=true) */
+  fullPrompt?: string;
+  /** Full response content (only captured if captureFullContent=true) */
+  fullResponse?: string;
 }
 
 export interface TrackResult {

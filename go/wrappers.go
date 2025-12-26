@@ -2,11 +2,65 @@ package diagnyx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
 )
+
+// truncateContent truncates a string to maxLength, appending "... [truncated]" if needed
+func truncateContent(content string, maxLength int) string {
+	if maxLength <= 0 {
+		maxLength = 10000
+	}
+	if len(content) > maxLength {
+		return content[:maxLength] + "... [truncated]"
+	}
+	return content
+}
+
+// extractOpenAIPrompt extracts prompt content from OpenAI messages
+func extractOpenAIPrompt(messages []openai.ChatCompletionMessage, maxLength int) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, m := range messages {
+		var content string
+		if m.Content != "" {
+			content = m.Content
+		} else if len(m.MultiContent) > 0 {
+			// Handle multi-content messages (images, etc.)
+			var textParts []string
+			for _, c := range m.MultiContent {
+				if c.Type == openai.ChatMessagePartTypeText {
+					textParts = append(textParts, c.Text)
+				} else {
+					// Serialize non-text content
+					if b, err := json.Marshal(c); err == nil {
+						textParts = append(textParts, string(b))
+					}
+				}
+			}
+			content = strings.Join(textParts, "")
+		}
+		parts = append(parts, fmt.Sprintf("[%s]: %s", m.Role, content))
+	}
+
+	return truncateContent(strings.Join(parts, "\n"), maxLength)
+}
+
+// extractOpenAIResponse extracts response content from OpenAI completion
+func extractOpenAIResponse(resp openai.ChatCompletionResponse, maxLength int) string {
+	if len(resp.Choices) == 0 {
+		return ""
+	}
+	content := resp.Choices[0].Message.Content
+	return truncateContent(content, maxLength)
+}
 
 // OpenAIWrapper wraps an OpenAI client for automatic tracking
 type OpenAIWrapper struct {
@@ -59,6 +113,13 @@ func (w *OpenAIWrapper) CreateChatCompletion(ctx context.Context, req openai.Cha
 		call.Status = StatusSuccess
 		call.InputTokens = resp.Usage.PromptTokens
 		call.OutputTokens = resp.Usage.CompletionTokens
+
+		// Extract content if enabled
+		config := w.diagnyx.Config()
+		if config.CaptureFullContent {
+			call.FullPrompt = extractOpenAIPrompt(req.Messages, config.ContentMaxLength)
+			call.FullResponse = extractOpenAIResponse(resp, config.ContentMaxLength)
+		}
 	}
 
 	w.diagnyx.Track(call)
@@ -133,6 +194,8 @@ func TrackCall(diagnyx *Client, provider Provider, model string, fn func() (inpu
 		SpanID:         trackOpts.SpanID,
 		Metadata:       trackOpts.Metadata,
 		Timestamp:      time.Now().UTC(),
+		FullPrompt:     trackOpts.FullPrompt,
+		FullResponse:   trackOpts.FullResponse,
 	}
 
 	if err != nil {
@@ -145,4 +208,52 @@ func TrackCall(diagnyx *Client, provider Provider, model string, fn func() (inpu
 	diagnyx.Track(call)
 
 	return err
+}
+
+// TrackCallWithContent is a helper to track any LLM call with full content capture
+// Use this for providers without dedicated wrappers (like Anthropic in Go)
+func TrackCallWithContent(
+	diagnyx *Client,
+	provider Provider,
+	model string,
+	prompt string,
+	response string,
+	inputTokens int,
+	outputTokens int,
+	latencyMs int64,
+	opts ...TrackOptions,
+) {
+	var trackOpts TrackOptions
+	if len(opts) > 0 {
+		trackOpts = opts[0]
+	}
+
+	config := diagnyx.Config()
+	fullPrompt := ""
+	fullResponse := ""
+
+	if config.CaptureFullContent {
+		fullPrompt = truncateContent(prompt, config.ContentMaxLength)
+		fullResponse = truncateContent(response, config.ContentMaxLength)
+	}
+
+	call := LLMCall{
+		Provider:       provider,
+		Model:          model,
+		InputTokens:    inputTokens,
+		OutputTokens:   outputTokens,
+		LatencyMs:      latencyMs,
+		Status:         StatusSuccess,
+		ProjectID:      trackOpts.ProjectID,
+		Environment:    trackOpts.Environment,
+		UserIdentifier: trackOpts.UserIdentifier,
+		TraceID:        trackOpts.TraceID,
+		SpanID:         trackOpts.SpanID,
+		Metadata:       trackOpts.Metadata,
+		Timestamp:      time.Now().UTC(),
+		FullPrompt:     fullPrompt,
+		FullResponse:   fullResponse,
+	}
+
+	diagnyx.Track(call)
 }

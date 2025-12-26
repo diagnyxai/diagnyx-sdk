@@ -39,3 +39,18 @@ Repository = "https://github.com/diagnyx/diagnyx-python"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["diagnyx*"]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["diagnyx"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

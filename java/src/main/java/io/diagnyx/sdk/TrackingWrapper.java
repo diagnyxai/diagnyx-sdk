@@ -42,7 +42,7 @@ public class TrackingWrapper {
             TrackedResult<T> result = call.execute();
             long latencyMs = System.currentTimeMillis() - startTime;
 
-            LLMCall llmCall = LLMCall.builder()
+            LLMCall.Builder builder = LLMCall.builder()
                     .provider(provider)
                     .model(model)
                     .inputTokens(result.getInputTokens())
@@ -55,10 +55,17 @@ public class TrackingWrapper {
                     .traceId(options.getTraceId())
                     .spanId(options.getSpanId())
                     .metadata(options.getMetadata())
-                    .timestamp(Instant.now())
-                    .build();
+                    .timestamp(Instant.now());
 
-            client.track(llmCall);
+            // Add content if provided
+            if (result.getFullPrompt() != null) {
+                builder.fullPrompt(result.getFullPrompt());
+            }
+            if (result.getFullResponse() != null) {
+                builder.fullResponse(result.getFullResponse());
+            }
+
+            client.track(builder.build());
             return result.getValue();
 
         } catch (Exception e) {
@@ -95,26 +102,40 @@ public class TrackingWrapper {
     }
 
     /**
-     * Result of a tracked call including token counts.
+     * Result of a tracked call including token counts and optional content.
      */
     public static class TrackedResult<T> {
         private final T value;
         private final int inputTokens;
         private final int outputTokens;
+        private final String fullPrompt;
+        private final String fullResponse;
 
         public TrackedResult(T value, int inputTokens, int outputTokens) {
+            this(value, inputTokens, outputTokens, null, null);
+        }
+
+        public TrackedResult(T value, int inputTokens, int outputTokens, String fullPrompt, String fullResponse) {
             this.value = value;
             this.inputTokens = inputTokens;
             this.outputTokens = outputTokens;
+            this.fullPrompt = fullPrompt;
+            this.fullResponse = fullResponse;
         }
 
         public static <T> TrackedResult<T> of(T value, int inputTokens, int outputTokens) {
             return new TrackedResult<>(value, inputTokens, outputTokens);
         }
 
+        public static <T> TrackedResult<T> of(T value, int inputTokens, int outputTokens, String fullPrompt, String fullResponse) {
+            return new TrackedResult<>(value, inputTokens, outputTokens, fullPrompt, fullResponse);
+        }
+
         public T getValue() { return value; }
         public int getInputTokens() { return inputTokens; }
         public int getOutputTokens() { return outputTokens; }
+        public String getFullPrompt() { return fullPrompt; }
+        public String getFullResponse() { return fullResponse; }
     }
 
     /**

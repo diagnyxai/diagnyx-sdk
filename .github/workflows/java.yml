@@ -1,0 +1,29 @@
+name: Java SDK
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['java/**']
+  pull_request:
+    branches: [main, develop]
+    paths: ['java/**']
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: java
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Verify build
+        run: mvn -B compile -DskipTests

@@ -37,11 +37,95 @@ interface AnthropicStream {
   finalMessage(): Promise<AnthropicMessage>;
 }
 
+interface AnthropicMessageInput {
+  role: string;
+  content: string | { type: string; text?: string; [key: string]: unknown }[];
+}
+
 type CreateMessageFn = (options: {
   model: string;
   stream?: boolean;
+  system?: string | { type: string; text?: string }[];
+  messages?: AnthropicMessageInput[];
   [key: string]: unknown;
 }) => Promise<AnthropicMessage | AnthropicStream>;
+
+/**
+ * Extract prompt content from Anthropic messages
+ */
+function extractAnthropicPrompt(
+  system?: string | { type: string; text?: string }[],
+  messages?: AnthropicMessageInput[],
+  maxLength?: number
+): string | undefined {
+  const parts: string[] = [];
+
+  // Extract system prompt
+  if (system) {
+    if (typeof system === 'string') {
+      parts.push(`[system]: ${system}`);
+    } else if (Array.isArray(system)) {
+      const systemText = system
+        .map((s) => (s.type === 'text' && s.text ? s.text : JSON.stringify(s)))
+        .join('');
+      parts.push(`[system]: ${systemText}`);
+    }
+  }
+
+  // Extract messages
+  if (messages) {
+    for (const m of messages) {
+      let content: string;
+      if (typeof m.content === 'string') {
+        content = m.content;
+      } else if (Array.isArray(m.content)) {
+        content = m.content
+          .map((c) => (c.type === 'text' && c.text ? c.text : JSON.stringify(c)))
+          .join('');
+      } else {
+        content = '';
+      }
+      parts.push(`[${m.role}]: ${content}`);
+    }
+  }
+
+  if (parts.length === 0) return undefined;
+
+  const result = parts.join('\n');
+  const max = maxLength || 10000;
+  if (result.length > max) {
+    return result.slice(0, max) + '... [truncated]';
+  }
+  return result;
+}
+
+/**
+ * Extract response content from Anthropic message
+ */
+function extractAnthropicResponse(
+  content: unknown[],
+  maxLength?: number
+): string | undefined {
+  if (!content || content.length === 0) return undefined;
+
+  const result = content
+    .map((c) => {
+      if (typeof c === 'object' && c !== null && 'type' in c) {
+        const block = c as { type: string; text?: string };
+        if (block.type === 'text' && block.text) {
+          return block.text;
+        }
+      }
+      return JSON.stringify(c);
+    })
+    .join('');
+
+  const max = maxLength || 10000;
+  if (result.length > max) {
+    return result.slice(0, max) + '... [truncated]';
+  }
+  return result;
+}
 
 interface AnthropicClient {
   messages: {
@@ -71,7 +155,7 @@ interface AnthropicClient {
 export function wrapAnthropic<T extends AnthropicClient>(
   client: T,
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): T {
   const wrappedClient = new Proxy(client, {
     get(target, prop, receiver) {
@@ -91,7 +175,7 @@ export function wrapAnthropic<T extends AnthropicClient>(
 function wrapMessages(
   messages: AnthropicClient['messages'],
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): AnthropicClient['messages'] {
   return {
     create: async function (createOptions: Parameters<CreateMessageFn>[0]) {
@@ -102,12 +186,35 @@ function wrapMessages(
 
         // Handle streaming response
         if (createOptions.stream && isStream(result)) {
-          return wrapStream(result, diagnyx, createOptions.model, startTime, options);
+          return wrapStream(
+            result,
+            diagnyx,
+            createOptions.model,
+            startTime,
+            options,
+            createOptions.system,
+            createOptions.messages
+          );
         }
 
         // Non-streaming response
         const response = result as AnthropicMessage;
         const latencyMs = Date.now() - startTime;
+
+        // Extract content if enabled
+        let fullPrompt: string | undefined;
+        let fullResponse: string | undefined;
+        if (diagnyx.config.captureFullContent) {
+          fullPrompt = extractAnthropicPrompt(
+            createOptions.system,
+            createOptions.messages,
+            diagnyx.config.contentMaxLength
+          );
+          fullResponse = extractAnthropicResponse(
+            response.content,
+            diagnyx.config.contentMaxLength
+          );
+        }
 
         void diagnyx.trackCall({
           provider: 'anthropic',
@@ -120,6 +227,8 @@ function wrapMessages(
           projectId: options?.projectId,
           environment: options?.environment,
           userIdentifier: options?.userIdentifier,
+          fullPrompt,
+          fullResponse,
         });
 
         return response;
@@ -151,11 +260,7 @@ function wrapMessages(
  * Check if the result is a stream
  */
 function isStream(result: unknown): result is AnthropicStream {
-  return (
-    result !== null &&
-    typeof result === 'object' &&
-    Symbol.asyncIterator in result
-  );
+  return result !== null && typeof result === 'object' && Symbol.asyncIterator in result;
 }
 
 /**
@@ -167,6 +272,8 @@ function wrapStream(
   model: string,
   startTime: number,
   options?: WrapperOptions,
+  system?: string | { type: string; text?: string }[],
+  messages?: AnthropicMessageInput[]
 ): AnthropicStream {
   let firstChunk = true;
   let ttft: number | undefined;
@@ -174,8 +281,13 @@ function wrapStream(
   let outputTokens = 0;
   let responseModel = model;
   let error: Error | undefined;
+  let accumulatedContent = '';
 
-  const wrappedIterator = async function* (): AsyncGenerator<AnthropicMessageStreamEvent, void, unknown> {
+  const wrappedIterator = async function* (): AsyncGenerator<
+    AnthropicMessageStreamEvent,
+    void,
+    unknown
+  > {
     try {
       for await (const event of stream) {
         if (firstChunk) {
@@ -193,6 +305,16 @@ function wrapStream(
           outputTokens = event.usage.output_tokens ?? 0;
         }
 
+        // Accumulate text content from delta events
+        if (
+          diagnyx.config.captureFullContent &&
+          event.type === 'content_block_delta' &&
+          event.delta?.type === 'text_delta' &&
+          event.delta?.text
+        ) {
+          accumulatedContent += event.delta.text;
+        }
+
         yield event;
       }
     } catch (err) {
@@ -200,6 +322,18 @@ function wrapStream(
       throw err;
     } finally {
       const latencyMs = Date.now() - startTime;
+
+      // Extract content if enabled
+      let fullPrompt: string | undefined;
+      let fullResponse: string | undefined;
+      if (diagnyx.config.captureFullContent) {
+        fullPrompt = extractAnthropicPrompt(system, messages, diagnyx.config.contentMaxLength);
+        const maxLen = diagnyx.config.contentMaxLength || 10000;
+        fullResponse =
+          accumulatedContent.length > maxLen
+            ? accumulatedContent.slice(0, maxLen) + '... [truncated]'
+            : accumulatedContent || undefined;
+      }
 
       void diagnyx.trackCall({
         provider: 'anthropic',
@@ -215,6 +349,8 @@ function wrapStream(
         projectId: options?.projectId,
         environment: options?.environment,
         userIdentifier: options?.userIdentifier,
+        fullPrompt,
+        fullResponse,
       });
     }
   };

@@ -84,7 +84,7 @@ describe('Diagnyx Client', () => {
       new Response(JSON.stringify({ tracked: 10, totalCost: 0.1, totalTokens: 1500, ids: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
 
     // Add 10 calls to reach batch size
@@ -118,7 +118,7 @@ describe('Diagnyx Client', () => {
       new Response(JSON.stringify({ tracked: 1, totalCost: 0.01, totalTokens: 150, ids: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
 
     await client.trackCall({
@@ -136,7 +136,7 @@ describe('Diagnyx Client', () => {
       expect.any(String),
       expect.objectContaining({
         body: expect.stringContaining('2024-01-15T10:00:00.000Z'),
-      }),
+      })
     );
 
     fetchSpy.mockRestore();

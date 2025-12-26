@@ -205,3 +205,8 @@ func (c *Client) log(format string, args ...interface{}) {
 		fmt.Printf("[Diagnyx] "+format+"\n", args...)
 	}
 }
+
+// Config returns the client configuration
+func (c *Client) Config() Config {
+	return c.config
+}
