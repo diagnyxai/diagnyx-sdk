@@ -270,3 +270,55 @@ where
         }
     }
 }
+
+/// Track an LLM call with full content capture.
+/// Use this for providers without dedicated wrappers (like Anthropic).
+pub async fn track_call_with_content(
+    client: &DiagnyxClient,
+    provider: crate::Provider,
+    model: impl Into<String>,
+    prompt: impl Into<String>,
+    response: impl Into<String>,
+    input_tokens: i32,
+    output_tokens: i32,
+    latency_ms: i64,
+) {
+    let config = client.config.clone();
+    let model = model.into();
+    let prompt = prompt.into();
+    let response = response.into();
+
+    let mut builder = LLMCall::builder()
+        .provider(provider)
+        .model(&model)
+        .input_tokens(input_tokens)
+        .output_tokens(output_tokens)
+        .latency_ms(latency_ms)
+        .status(crate::CallStatus::Success);
+
+    if config.capture_full_content {
+        let max_len = if config.content_max_length > 0 {
+            config.content_max_length
+        } else {
+            10000
+        };
+
+        let truncated_prompt = if prompt.len() > max_len {
+            format!("{}... [truncated]", &prompt[..max_len])
+        } else {
+            prompt
+        };
+
+        let truncated_response = if response.len() > max_len {
+            format!("{}... [truncated]", &response[..max_len])
+        } else {
+            response
+        };
+
+        builder = builder
+            .full_prompt(truncated_prompt)
+            .full_response(truncated_response);
+    }
+
+    client.track(builder.build()).await;
+}

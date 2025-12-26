@@ -62,6 +62,14 @@ public class LLMCall {
     @JsonProperty("timestamp")
     private Instant timestamp;
 
+    /** Full prompt content (only captured if captureFullContent=true) */
+    @JsonProperty("full_prompt")
+    private String fullPrompt;
+
+    /** Full response content (only captured if captureFullContent=true) */
+    @JsonProperty("full_response")
+    private String fullResponse;
+
     public LLMCall() {
         this.timestamp = Instant.now();
         this.status = CallStatus.SUCCESS;
@@ -160,6 +168,16 @@ public class LLMCall {
             return this;
         }
 
+        public Builder fullPrompt(String fullPrompt) {
+            call.fullPrompt = fullPrompt;
+            return this;
+        }
+
+        public Builder fullResponse(String fullResponse) {
+            call.fullResponse = fullResponse;
+            return this;
+        }
+
         public LLMCall build() {
             return call;
         }
@@ -216,4 +234,10 @@ public class LLMCall {
 
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+
+    public String getFullPrompt() { return fullPrompt; }
+    public void setFullPrompt(String fullPrompt) { this.fullPrompt = fullPrompt; }
+
+    public String getFullResponse() { return fullResponse; }
+    public void setFullResponse(String fullResponse) { this.fullResponse = fullResponse; }
 }

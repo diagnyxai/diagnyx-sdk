@@ -32,17 +32,25 @@ type Config struct {
 	FlushIntervalMs int
 	MaxRetries      int
 	Debug           bool
+	// CaptureFullContent enables capturing full prompt/response content.
+	// Default: false (privacy-first)
+	CaptureFullContent bool
+	// ContentMaxLength is the maximum length for captured content before truncation.
+	// Default: 10000
+	ContentMaxLength int
 }
 
 // DefaultConfig returns a Config with default values
 func DefaultConfig(apiKey string) Config {
 	return Config{
-		APIKey:          apiKey,
-		BaseURL:         "https://api.diagnyx.io",
-		BatchSize:       100,
-		FlushIntervalMs: 5000,
-		MaxRetries:      3,
-		Debug:           false,
+		APIKey:             apiKey,
+		BaseURL:            "https://api.diagnyx.io",
+		BatchSize:          100,
+		FlushIntervalMs:    5000,
+		MaxRetries:         3,
+		Debug:              false,
+		CaptureFullContent: false,
+		ContentMaxLength:   10000,
 	}
 }
 
@@ -65,6 +73,10 @@ type LLMCall struct {
 	SpanID         string                 `json:"span_id,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	Timestamp      time.Time              `json:"timestamp"`
+	// FullPrompt contains the full prompt content (only captured if CaptureFullContent=true)
+	FullPrompt string `json:"full_prompt,omitempty"`
+	// FullResponse contains the full response content (only captured if CaptureFullContent=true)
+	FullResponse string `json:"full_response,omitempty"`
 }
 
 // BatchRequest is the request body for batch ingestion
@@ -88,4 +100,8 @@ type TrackOptions struct {
 	TraceID        string
 	SpanID         string
 	Metadata       map[string]interface{}
+	// FullPrompt is the full prompt content (for manual tracking with content capture)
+	FullPrompt string
+	// FullResponse is the full response content (for manual tracking with content capture)
+	FullResponse string
 }

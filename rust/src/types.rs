@@ -39,6 +39,10 @@ pub struct DiagnyxConfig {
     pub flush_interval_ms: u64,
     pub max_retries: u32,
     pub debug: bool,
+    /// Enable capturing full prompt/response content. Default: false (privacy-first)
+    pub capture_full_content: bool,
+    /// Maximum length for captured content before truncation. Default: 10000
+    pub content_max_length: usize,
 }
 
 impl DiagnyxConfig {
@@ -50,6 +54,8 @@ impl DiagnyxConfig {
             flush_interval_ms: 5000,
             max_retries: 3,
             debug: false,
+            capture_full_content: false,
+            content_max_length: 10000,
         }
     }
 
@@ -75,6 +81,16 @@ impl DiagnyxConfig {
 
     pub fn debug(mut self, debug: bool) -> Self {
         self.debug = debug;
+        self
+    }
+
+    pub fn capture_full_content(mut self, capture: bool) -> Self {
+        self.capture_full_content = capture;
+        self
+    }
+
+    pub fn content_max_length(mut self, length: usize) -> Self {
+        self.content_max_length = length;
         self
     }
 }
@@ -109,6 +125,12 @@ pub struct LLMCall {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     pub timestamp: DateTime<Utc>,
+    /// Full prompt content (only captured if capture_full_content=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_prompt: Option<String>,
+    /// Full response content (only captured if capture_full_content=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_response: Option<String>,
 }
 
 impl LLMCall {
@@ -136,6 +158,8 @@ pub struct LLMCallBuilder {
     trace_id: Option<String>,
     span_id: Option<String>,
     metadata: Option<HashMap<String, serde_json::Value>>,
+    full_prompt: Option<String>,
+    full_response: Option<String>,
 }
 
 impl LLMCallBuilder {
@@ -219,6 +243,16 @@ impl LLMCallBuilder {
         self
     }
 
+    pub fn full_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.full_prompt = Some(prompt.into());
+        self
+    }
+
+    pub fn full_response(mut self, response: impl Into<String>) -> Self {
+        self.full_response = Some(response.into());
+        self
+    }
+
     pub fn build(self) -> LLMCall {
         LLMCall {
             provider: self.provider.expect("provider is required"),
@@ -238,6 +272,8 @@ impl LLMCallBuilder {
             span_id: self.span_id,
             metadata: self.metadata,
             timestamp: Utc::now(),
+            full_prompt: self.full_prompt,
+            full_response: self.full_response,
         }
     }
 }

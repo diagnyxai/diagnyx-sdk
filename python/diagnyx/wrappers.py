@@ -1,14 +1,127 @@
 """Wrappers for popular LLM libraries."""
 
 import functools
+import json
 import time
 from datetime import datetime
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, List, Optional, TypeVar, Union
 
 from .client import Diagnyx
 from .types import CallStatus, LLMCallData, LLMProvider
 
 T = TypeVar("T")
+
+
+def _extract_openai_prompt(
+    messages: Optional[List[dict]], max_length: int = 10000
+) -> Optional[str]:
+    """Extract prompt content from OpenAI messages."""
+    if not messages:
+        return None
+
+    parts = []
+    for m in messages:
+        role = m.get("role", "unknown")
+        content = m.get("content", "")
+        if isinstance(content, str):
+            parts.append(f"[{role}]: {content}")
+        elif isinstance(content, list):
+            # Handle content blocks (images, text, etc.)
+            text_parts = []
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "text":
+                    text_parts.append(c.get("text", ""))
+                else:
+                    text_parts.append(json.dumps(c))
+            parts.append(f"[{role}]: {''.join(text_parts)}")
+
+    result = "\n".join(parts)
+    if len(result) > max_length:
+        return result[:max_length] + "... [truncated]"
+    return result
+
+
+def _extract_openai_response(result: Any, max_length: int = 10000) -> Optional[str]:
+    """Extract response content from OpenAI completion."""
+    try:
+        choices = getattr(result, "choices", [])
+        if not choices:
+            return None
+        message = getattr(choices[0], "message", None)
+        if not message:
+            return None
+        content = getattr(message, "content", "") or ""
+        if len(content) > max_length:
+            return content[:max_length] + "... [truncated]"
+        return content
+    except Exception:
+        return None
+
+
+def _extract_anthropic_prompt(
+    system: Optional[Union[str, List[dict]]],
+    messages: Optional[List[dict]],
+    max_length: int = 10000,
+) -> Optional[str]:
+    """Extract prompt content from Anthropic messages."""
+    parts = []
+
+    # Extract system prompt
+    if system:
+        if isinstance(system, str):
+            parts.append(f"[system]: {system}")
+        elif isinstance(system, list):
+            system_text = "".join(
+                s.get("text", "") if s.get("type") == "text" else json.dumps(s)
+                for s in system
+            )
+            parts.append(f"[system]: {system_text}")
+
+    # Extract messages
+    if messages:
+        for m in messages:
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            if isinstance(content, str):
+                parts.append(f"[{role}]: {content}")
+            elif isinstance(content, list):
+                text_parts = []
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "text":
+                        text_parts.append(c.get("text", ""))
+                    else:
+                        text_parts.append(json.dumps(c))
+                parts.append(f"[{role}]: {''.join(text_parts)}")
+
+    if not parts:
+        return None
+
+    result = "\n".join(parts)
+    if len(result) > max_length:
+        return result[:max_length] + "... [truncated]"
+    return result
+
+
+def _extract_anthropic_response(result: Any, max_length: int = 10000) -> Optional[str]:
+    """Extract response content from Anthropic message."""
+    try:
+        content = getattr(result, "content", [])
+        if not content:
+            return None
+
+        parts = []
+        for block in content:
+            if hasattr(block, "type") and block.type == "text":
+                parts.append(getattr(block, "text", ""))
+            else:
+                parts.append(str(block))
+
+        response = "".join(parts)
+        if len(response) > max_length:
+            return response[:max_length] + "... [truncated]"
+        return response
+    except Exception:
+        return None
 
 
 def wrap_openai(
@@ -46,6 +159,18 @@ def wrap_openai(
             model = kwargs.get("model", "unknown")
             usage = getattr(result, "usage", None)
 
+            # Extract content if enabled
+            full_prompt = None
+            full_response = None
+            if diagnyx.config.capture_full_content:
+                messages = kwargs.get("messages")
+                full_prompt = _extract_openai_prompt(
+                    messages, diagnyx.config.content_max_length
+                )
+                full_response = _extract_openai_response(
+                    result, diagnyx.config.content_max_length
+                )
+
             if usage:
                 call_data = LLMCallData(
                     provider=LLMProvider.OPENAI,
@@ -59,6 +184,8 @@ def wrap_openai(
                     environment=environment,
                     user_identifier=user_identifier,
                     timestamp=datetime.utcnow(),
+                    full_prompt=full_prompt,
+                    full_response=full_response,
                 )
                 diagnyx.track_call(call_data)
 
@@ -129,6 +256,19 @@ def wrap_anthropic(
             model = kwargs.get("model", "unknown")
             usage = getattr(result, "usage", None)
 
+            # Extract content if enabled
+            full_prompt = None
+            full_response = None
+            if diagnyx.config.capture_full_content:
+                system = kwargs.get("system")
+                messages = kwargs.get("messages")
+                full_prompt = _extract_anthropic_prompt(
+                    system, messages, diagnyx.config.content_max_length
+                )
+                full_response = _extract_anthropic_response(
+                    result, diagnyx.config.content_max_length
+                )
+
             if usage:
                 call_data = LLMCallData(
                     provider=LLMProvider.ANTHROPIC,
@@ -142,6 +282,8 @@ def wrap_anthropic(
                     environment=environment,
                     user_identifier=user_identifier,
                     timestamp=datetime.utcnow(),
+                    full_prompt=full_prompt,
+                    full_response=full_response,
                 )
                 diagnyx.track_call(call_data)
 

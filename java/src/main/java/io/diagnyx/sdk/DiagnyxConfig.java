@@ -10,6 +10,10 @@ public class DiagnyxConfig {
     private int flushIntervalMs = 5000;
     private int maxRetries = 3;
     private boolean debug = false;
+    /** Enable capturing full prompt/response content. Default: false (privacy-first) */
+    private boolean captureFullContent = false;
+    /** Maximum length for captured content before truncation. Default: 10000 */
+    private int contentMaxLength = 10000;
 
     public DiagnyxConfig(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
@@ -54,6 +58,16 @@ public class DiagnyxConfig {
             return this;
         }
 
+        public Builder captureFullContent(boolean captureFullContent) {
+            config.captureFullContent = captureFullContent;
+            return this;
+        }
+
+        public Builder contentMaxLength(int contentMaxLength) {
+            config.contentMaxLength = contentMaxLength;
+            return this;
+        }
+
         public DiagnyxConfig build() {
             return config;
         }
@@ -66,4 +80,6 @@ public class DiagnyxConfig {
     public int getFlushIntervalMs() { return flushIntervalMs; }
     public int getMaxRetries() { return maxRetries; }
     public boolean isDebug() { return debug; }
+    public boolean isCaptureFullContent() { return captureFullContent; }
+    public int getContentMaxLength() { return contentMaxLength; }
 }
