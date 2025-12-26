@@ -71,7 +71,7 @@ interface AnthropicClient {
 export function wrapAnthropic<T extends AnthropicClient>(
   client: T,
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): T {
   const wrappedClient = new Proxy(client, {
     get(target, prop, receiver) {
@@ -91,7 +91,7 @@ export function wrapAnthropic<T extends AnthropicClient>(
 function wrapMessages(
   messages: AnthropicClient['messages'],
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): AnthropicClient['messages'] {
   return {
     create: async function (createOptions: Parameters<CreateMessageFn>[0]) {
@@ -151,11 +151,7 @@ function wrapMessages(
  * Check if the result is a stream
  */
 function isStream(result: unknown): result is AnthropicStream {
-  return (
-    result !== null &&
-    typeof result === 'object' &&
-    Symbol.asyncIterator in result
-  );
+  return result !== null && typeof result === 'object' && Symbol.asyncIterator in result;
 }
 
 /**
@@ -166,7 +162,7 @@ function wrapStream(
   diagnyx: Diagnyx,
   model: string,
   startTime: number,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): AnthropicStream {
   let firstChunk = true;
   let ttft: number | undefined;
@@ -175,7 +171,11 @@ function wrapStream(
   let responseModel = model;
   let error: Error | undefined;
 
-  const wrappedIterator = async function* (): AsyncGenerator<AnthropicMessageStreamEvent, void, unknown> {
+  const wrappedIterator = async function* (): AsyncGenerator<
+    AnthropicMessageStreamEvent,
+    void,
+    unknown
+  > {
     try {
       for await (const event of stream) {
         if (firstChunk) {

@@ -7,7 +7,7 @@ import { LLMCallData, OpenAIUsage, AnthropicUsage, WrapperOptions } from './type
 export function wrapOpenAI<T extends object>(
   client: T,
   diagnyx: Diagnyx,
-  options: WrapperOptions = {},
+  options: WrapperOptions = {}
 ): T {
   const wrapped = new Proxy(client, {
     get(target, prop) {
@@ -24,11 +24,7 @@ export function wrapOpenAI<T extends object>(
   return wrapped;
 }
 
-function wrapOpenAIChat<T extends object>(
-  chat: T,
-  diagnyx: Diagnyx,
-  options: WrapperOptions,
-): T {
+function wrapOpenAIChat<T extends object>(chat: T, diagnyx: Diagnyx, options: WrapperOptions): T {
   return new Proxy(chat, {
     get(target, prop) {
       const value = (target as Record<string | symbol, unknown>)[prop];
@@ -45,7 +41,7 @@ function wrapOpenAIChat<T extends object>(
 function wrapOpenAICompletions<T extends object>(
   completions: T,
   diagnyx: Diagnyx,
-  options: WrapperOptions,
+  options: WrapperOptions
 ): T {
   return new Proxy(completions, {
     get(target, prop) {
@@ -59,7 +55,10 @@ function wrapOpenAICompletions<T extends object>(
           let errorMessage: string | undefined;
 
           try {
-            const result = await (value as Function).apply(target, args);
+            const result = await (value as (...args: unknown[]) => Promise<unknown>).apply(
+              target,
+              args
+            );
             const latencyMs = Date.now() - startTime;
 
             const requestArgs = args[0] as { model?: string } | undefined;
@@ -122,7 +121,7 @@ function wrapOpenAICompletions<T extends object>(
 export function wrapAnthropic<T extends object>(
   client: T,
   diagnyx: Diagnyx,
-  options: WrapperOptions = {},
+  options: WrapperOptions = {}
 ): T {
   const wrapped = new Proxy(client, {
     get(target, prop) {
@@ -142,7 +141,7 @@ export function wrapAnthropic<T extends object>(
 function wrapAnthropicMessages<T extends object>(
   messages: T,
   diagnyx: Diagnyx,
-  options: WrapperOptions,
+  options: WrapperOptions
 ): T {
   return new Proxy(messages, {
     get(target, prop) {
@@ -156,7 +155,10 @@ function wrapAnthropicMessages<T extends object>(
           let errorMessage: string | undefined;
 
           try {
-            const result = await (value as Function).apply(target, args);
+            const result = await (value as (...args: unknown[]) => Promise<unknown>).apply(
+              target,
+              args
+            );
             const latencyMs = Date.now() - startTime;
 
             const requestArgs = args[0] as { model?: string } | undefined;
@@ -222,7 +224,7 @@ export async function trackWithTiming<T>(
   model: string,
   fn: () => Promise<T>,
   getUsage: (result: T) => { inputTokens: number; outputTokens: number },
-  options: WrapperOptions = {},
+  options: WrapperOptions = {}
 ): Promise<T> {
   const startTime = Date.now();
 

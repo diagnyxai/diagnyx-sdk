@@ -47,7 +47,7 @@ describe('OpenAI Wrapper', () => {
         inputTokens: 100,
         outputTokens: 50,
         status: 'success',
-      }),
+      })
     );
   });
 
@@ -76,7 +76,7 @@ describe('OpenAI Wrapper', () => {
         provider: 'openai',
         status: 'error',
         errorMessage: 'API Error',
-      }),
+      })
     );
   });
 });
@@ -123,7 +123,7 @@ describe('Anthropic Wrapper', () => {
         inputTokens: 200,
         outputTokens: 100,
         status: 'success',
-      }),
+      })
     );
   });
 });
@@ -151,7 +151,7 @@ describe('trackWithTiming', () => {
       'openai',
       'gpt-4',
       async () => ({ response: 'Hello!', tokens: { in: 10, out: 5 } }),
-      (res) => ({ inputTokens: res.tokens.in, outputTokens: res.tokens.out }),
+      (res) => ({ inputTokens: res.tokens.in, outputTokens: res.tokens.out })
     );
 
     expect(result.response).toBe('Hello!');
@@ -162,7 +162,7 @@ describe('trackWithTiming', () => {
         inputTokens: 10,
         outputTokens: 5,
         status: 'success',
-      }),
+      })
     );
   });
 });

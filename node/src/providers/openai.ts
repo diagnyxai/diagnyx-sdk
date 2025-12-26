@@ -74,7 +74,7 @@ interface OpenAIClient {
 export function wrapOpenAI<T extends OpenAIClient>(
   client: T,
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): T {
   const wrappedClient = new Proxy(client, {
     get(target, prop, receiver) {
@@ -97,13 +97,13 @@ export function wrapOpenAI<T extends OpenAIClient>(
 function wrapChat(
   chat: OpenAIClient['chat'],
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): OpenAIClient['chat'] {
   return {
     completions: {
       create: async function (createOptions: Parameters<CreateChatCompletionFn>[0]) {
         const startTime = Date.now();
-        let ttft: number | undefined;
+        let _ttft: number | undefined;
 
         try {
           const result = await chat.completions.create(createOptions);
@@ -120,7 +120,7 @@ function wrapChat(
               diagnyx,
               createOptions.model,
               startTime,
-              options,
+              options
             );
           }
 
@@ -173,7 +173,7 @@ function wrapChat(
 function wrapEmbeddings(
   embeddings: OpenAIClient['embeddings'],
   diagnyx: Diagnyx,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): OpenAIClient['embeddings'] {
   return {
     create: async function (createOptions: Parameters<CreateEmbeddingFn>[0]) {
@@ -229,7 +229,7 @@ async function* wrapStream(
   diagnyx: Diagnyx,
   model: string,
   startTime: number,
-  options?: WrapperOptions,
+  options?: WrapperOptions
 ): AsyncGenerator<OpenAIChatCompletionChunk, void, unknown> {
   let firstChunk = true;
   let ttft: number | undefined;

@@ -1,9 +1,4 @@
-import {
-  DiagnyxConfig,
-  LLMCallData,
-  TrackResult,
-  BatchResult,
-} from './types';
+import { DiagnyxConfig, LLMCallData, BatchResult } from './types';
 
 const DEFAULT_BASE_URL = 'https://api.diagnyx.com';
 const DEFAULT_BATCH_SIZE = 100;
