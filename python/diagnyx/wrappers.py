@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Callable, Optional, TypeVar
 
 from .client import Diagnyx
-from .types import LLMCallData, CallStatus, LLMProvider
+from .types import CallStatus, LLMCallData, LLMProvider
 
 T = TypeVar("T")
 

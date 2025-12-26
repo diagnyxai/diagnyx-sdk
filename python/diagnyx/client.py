@@ -1,6 +1,5 @@
 """Diagnyx client for LLM tracking."""
 
-import asyncio
 import threading
 import time
 from datetime import datetime
@@ -9,10 +8,9 @@ from typing import List, Optional
 import httpx
 
 from .types import (
+    BatchResult,
     DiagnyxConfig,
     LLMCallData,
-    TrackResult,
-    BatchResult,
 )
 
 
