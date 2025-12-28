@@ -395,6 +395,92 @@ export class Trace {
 }
 
 /**
+ * Extract a preview from OpenAI messages
+ */
+function extractOpenAIMessagesPreview(
+  messages: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>,
+  maxLength = 500
+): string {
+  const parts: string[] = [];
+  for (const m of messages) {
+    const role = m.role ?? 'unknown';
+    const content = m.content;
+    if (typeof content === 'string') {
+      parts.push(`[${role}]: ${content.slice(0, 100)}`);
+    } else if (Array.isArray(content)) {
+      const text = content
+        .filter((c) => c.type === 'text' && c.text)
+        .map((c) => c.text?.slice(0, 50) ?? '')
+        .join(' ');
+      parts.push(`[${role}]: ${text}`);
+    }
+  }
+  return parts.join('\n').slice(0, maxLength);
+}
+
+/**
+ * Extract a preview from OpenAI response
+ */
+function extractOpenAIResponsePreview(response: unknown, maxLength = 500): string {
+  try {
+    const resp = response as { choices?: Array<{ message?: { content?: string } }> };
+    const choices = resp.choices ?? [];
+    if (choices.length > 0) {
+      const content = choices[0]?.message?.content ?? '';
+      return content.slice(0, maxLength);
+    }
+  } catch {
+    // Ignore errors
+  }
+  return '';
+}
+
+/**
+ * Extract a preview from Anthropic messages
+ */
+function extractAnthropicMessagesPreview(
+  system: string | undefined,
+  messages: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>,
+  maxLength = 500
+): string {
+  const parts: string[] = [];
+  if (system) {
+    parts.push(`[system]: ${system.slice(0, 100)}`);
+  }
+  for (const m of messages) {
+    const role = m.role ?? 'unknown';
+    const content = m.content;
+    if (typeof content === 'string') {
+      parts.push(`[${role}]: ${content.slice(0, 100)}`);
+    } else if (Array.isArray(content)) {
+      const text = content
+        .filter((c) => c.type === 'text' && c.text)
+        .map((c) => c.text?.slice(0, 50) ?? '')
+        .join(' ');
+      parts.push(`[${role}]: ${text}`);
+    }
+  }
+  return parts.join('\n').slice(0, maxLength);
+}
+
+/**
+ * Extract a preview from Anthropic response
+ */
+function extractAnthropicResponsePreview(response: unknown, maxLength = 500): string {
+  try {
+    const resp = response as { content?: Array<{ type?: string; text?: string }> };
+    const content = resp.content ?? [];
+    const parts = content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '');
+    return parts.join('').slice(0, maxLength);
+  } catch {
+    // Ignore errors
+  }
+  return '';
+}
+
+/**
  * Tracer for creating and managing traces
  */
 export class Tracer {
@@ -477,6 +563,193 @@ export class Tracer {
    */
   getCurrentSpan(): Span | undefined {
     return spanStorage.getStore();
+  }
+
+  /**
+   * Wrap an OpenAI client to automatically trace all calls
+   *
+   * @param openaiClient - An OpenAI client instance
+   * @returns The same client with tracing enabled
+   *
+   * @example
+   * ```typescript
+   * import OpenAI from 'openai';
+   * const client = tracer.wrapOpenAI(new OpenAI());
+   * const response = await client.chat.completions.create(...); // Auto-traced
+   * ```
+   */
+  wrapOpenAI<T extends { chat: { completions: { create: (...args: unknown[]) => Promise<unknown> } } }>(
+    openaiClient: T
+  ): T {
+    const tracer = this;
+    const originalCreate = openaiClient.chat.completions.create.bind(openaiClient.chat.completions);
+
+    const tracedCreate = async (...args: unknown[]): Promise<unknown> => {
+      const options = (args[0] ?? {}) as {
+        model?: string;
+        messages?: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>;
+      };
+
+      // Get or create trace context
+      let currentTrace = traceStorage.getStore();
+      let autoCreatedTrace = false;
+
+      if (!currentTrace) {
+        currentTrace = tracer.trace({ name: 'openai-request' });
+        autoCreatedTrace = true;
+      }
+
+      // Create span for this LLM call
+      const model = options.model ?? 'unknown';
+      const span = currentTrace.span({ name: 'openai.chat.completions.create', spanType: 'llm' });
+
+      // Capture input
+      const messages = options.messages ?? [];
+      span.setInput({ messages, model }, extractOpenAIMessagesPreview(messages));
+
+      try {
+        const response = await traceStorage.run(currentTrace, () =>
+          spanStorage.run(span, () => originalCreate(...args))
+        );
+
+        // Extract usage info
+        const resp = response as {
+          id?: string;
+          model?: string;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        const usage = resp.usage;
+        const inputTokens = usage?.prompt_tokens ?? 0;
+        const outputTokens = usage?.completion_tokens ?? 0;
+
+        span.setLlmInfo({
+          provider: 'openai',
+          model: resp.model ?? model,
+          inputTokens,
+          outputTokens,
+        });
+
+        // Capture output
+        span.setOutput({ id: resp.id, model: resp.model }, extractOpenAIResponsePreview(response));
+
+        span.end();
+
+        // End auto-created trace
+        if (autoCreatedTrace) {
+          currentTrace.end();
+        }
+
+        return response;
+      } catch (error) {
+        span.setError(error as Error);
+        span.end();
+
+        if (autoCreatedTrace) {
+          currentTrace.end();
+        }
+
+        throw error;
+      }
+    };
+
+    openaiClient.chat.completions.create = tracedCreate as T['chat']['completions']['create'];
+    return openaiClient;
+  }
+
+  /**
+   * Wrap an Anthropic client to automatically trace all calls
+   *
+   * @param anthropicClient - An Anthropic client instance
+   * @returns The same client with tracing enabled
+   *
+   * @example
+   * ```typescript
+   * import Anthropic from '@anthropic-ai/sdk';
+   * const client = tracer.wrapAnthropic(new Anthropic());
+   * const response = await client.messages.create(...); // Auto-traced
+   * ```
+   */
+  wrapAnthropic<T extends { messages: { create: (...args: unknown[]) => Promise<unknown> } }>(
+    anthropicClient: T
+  ): T {
+    const tracer = this;
+    const originalCreate = anthropicClient.messages.create.bind(anthropicClient.messages);
+
+    const tracedCreate = async (...args: unknown[]): Promise<unknown> => {
+      const options = (args[0] ?? {}) as {
+        model?: string;
+        system?: string;
+        messages?: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>;
+      };
+
+      // Get or create trace context
+      let currentTrace = traceStorage.getStore();
+      let autoCreatedTrace = false;
+
+      if (!currentTrace) {
+        currentTrace = tracer.trace({ name: 'anthropic-request' });
+        autoCreatedTrace = true;
+      }
+
+      // Create span for this LLM call
+      const model = options.model ?? 'unknown';
+      const span = currentTrace.span({ name: 'anthropic.messages.create', spanType: 'llm' });
+
+      // Capture input
+      const system = options.system;
+      const messages = options.messages ?? [];
+      span.setInput(
+        { system, messages, model },
+        extractAnthropicMessagesPreview(system, messages)
+      );
+
+      try {
+        const response = await traceStorage.run(currentTrace, () =>
+          spanStorage.run(span, () => originalCreate(...args))
+        );
+
+        // Extract usage info
+        const resp = response as {
+          id?: string;
+          model?: string;
+          usage?: { input_tokens?: number; output_tokens?: number };
+        };
+        const usage = resp.usage;
+        const inputTokens = usage?.input_tokens ?? 0;
+        const outputTokens = usage?.output_tokens ?? 0;
+
+        span.setLlmInfo({
+          provider: 'anthropic',
+          model: resp.model ?? model,
+          inputTokens,
+          outputTokens,
+        });
+
+        // Capture output
+        span.setOutput({ id: resp.id, model: resp.model }, extractAnthropicResponsePreview(response));
+
+        span.end();
+
+        // End auto-created trace
+        if (autoCreatedTrace) {
+          currentTrace.end();
+        }
+
+        return response;
+      } catch (error) {
+        span.setError(error as Error);
+        span.end();
+
+        if (autoCreatedTrace) {
+          currentTrace.end();
+        }
+
+        throw error;
+      }
+    };
+
+    anthropicClient.messages.create = tracedCreate as T['messages']['create'];
+    return anthropicClient;
   }
 }
 

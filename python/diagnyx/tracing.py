@@ -362,6 +362,70 @@ class Trace:
         return False
 
 
+def _extract_openai_messages_preview(messages: List[Dict], max_length: int = 500) -> str:
+    """Extract a preview from OpenAI messages."""
+    parts = []
+    for m in messages:
+        role = m.get("role", "unknown")
+        content = m.get("content", "")
+        if isinstance(content, str):
+            parts.append(f"[{role}]: {content[:100]}")
+        elif isinstance(content, list):
+            text = " ".join(
+                c.get("text", "")[:50] for c in content if isinstance(c, dict) and c.get("type") == "text"
+            )
+            parts.append(f"[{role}]: {text}")
+    return "\n".join(parts)[:max_length]
+
+
+def _extract_openai_response_preview(response: Any, max_length: int = 500) -> str:
+    """Extract a preview from OpenAI response."""
+    try:
+        choices = getattr(response, "choices", [])
+        if choices:
+            message = getattr(choices[0], "message", None)
+            if message:
+                content = getattr(message, "content", "") or ""
+                return content[:max_length]
+    except Exception:
+        pass
+    return ""
+
+
+def _extract_anthropic_messages_preview(
+    system: Optional[str], messages: List[Dict], max_length: int = 500
+) -> str:
+    """Extract a preview from Anthropic messages."""
+    parts = []
+    if system:
+        parts.append(f"[system]: {system[:100]}")
+    for m in messages:
+        role = m.get("role", "unknown")
+        content = m.get("content", "")
+        if isinstance(content, str):
+            parts.append(f"[{role}]: {content[:100]}")
+        elif isinstance(content, list):
+            text = " ".join(
+                c.get("text", "")[:50] for c in content if isinstance(c, dict) and c.get("type") == "text"
+            )
+            parts.append(f"[{role}]: {text}")
+    return "\n".join(parts)[:max_length]
+
+
+def _extract_anthropic_response_preview(response: Any, max_length: int = 500) -> str:
+    """Extract a preview from Anthropic response."""
+    try:
+        content = getattr(response, "content", [])
+        parts = []
+        for block in content:
+            if hasattr(block, "type") and block.type == "text":
+                parts.append(getattr(block, "text", ""))
+        return "".join(parts)[:max_length]
+    except Exception:
+        pass
+    return ""
+
+
 class Tracer:
     """Tracer for creating and managing traces."""
 
@@ -377,6 +441,155 @@ class Tracer:
         self.environment = environment
         self.default_metadata = default_metadata or {}
         self._pending_traces: List[TraceData] = []
+
+    def wrap_openai(self, openai_client: Any) -> Any:
+        """Wrap an OpenAI client to automatically trace all calls.
+
+        Args:
+            openai_client: An OpenAI client instance
+
+        Returns:
+            The same client with tracing enabled
+
+        Usage:
+            from openai import OpenAI
+            client = tracer.wrap_openai(OpenAI())
+            response = client.chat.completions.create(...)  # Auto-traced
+        """
+        tracer = self
+        original_create = openai_client.chat.completions.create
+
+        @functools.wraps(original_create)
+        def traced_create(*args, **kwargs):
+            # Get or create trace context
+            current_trace = _current_trace.get()
+            auto_created_trace = False
+
+            if current_trace is None:
+                current_trace = tracer.trace(name="openai-request")
+                current_trace._token = _current_trace.set(current_trace)
+                auto_created_trace = True
+
+            # Create span for this LLM call
+            model = kwargs.get("model", "unknown")
+            span = current_trace.span("openai.chat.completions.create", span_type=SpanType.LLM)
+
+            with span:
+                # Capture input
+                messages = kwargs.get("messages", [])
+                span.set_input(
+                    {"messages": messages, "model": model},
+                    preview=_extract_openai_messages_preview(messages),
+                )
+
+                try:
+                    response = original_create(*args, **kwargs)
+
+                    # Extract usage info
+                    usage = getattr(response, "usage", None)
+                    input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+                    output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+                    span.set_llm_info(
+                        provider="openai",
+                        model=getattr(response, "model", model),
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+
+                    # Capture output
+                    span.set_output(
+                        {"id": getattr(response, "id", None), "model": getattr(response, "model", None)},
+                        preview=_extract_openai_response_preview(response),
+                    )
+
+                    return response
+
+                except Exception as e:
+                    span.set_error(e)
+                    raise
+
+            # End auto-created trace
+            if auto_created_trace:
+                current_trace.end()
+
+        openai_client.chat.completions.create = traced_create
+        return openai_client
+
+    def wrap_anthropic(self, anthropic_client: Any) -> Any:
+        """Wrap an Anthropic client to automatically trace all calls.
+
+        Args:
+            anthropic_client: An Anthropic client instance
+
+        Returns:
+            The same client with tracing enabled
+
+        Usage:
+            from anthropic import Anthropic
+            client = tracer.wrap_anthropic(Anthropic())
+            response = client.messages.create(...)  # Auto-traced
+        """
+        tracer = self
+        original_create = anthropic_client.messages.create
+
+        @functools.wraps(original_create)
+        def traced_create(*args, **kwargs):
+            # Get or create trace context
+            current_trace = _current_trace.get()
+            auto_created_trace = False
+
+            if current_trace is None:
+                current_trace = tracer.trace(name="anthropic-request")
+                current_trace._token = _current_trace.set(current_trace)
+                auto_created_trace = True
+
+            # Create span for this LLM call
+            model = kwargs.get("model", "unknown")
+            span = current_trace.span("anthropic.messages.create", span_type=SpanType.LLM)
+
+            with span:
+                # Capture input
+                system = kwargs.get("system")
+                messages = kwargs.get("messages", [])
+                span.set_input(
+                    {"system": system, "messages": messages, "model": model},
+                    preview=_extract_anthropic_messages_preview(system, messages),
+                )
+
+                try:
+                    response = original_create(*args, **kwargs)
+
+                    # Extract usage info
+                    usage = getattr(response, "usage", None)
+                    input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+                    output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+
+                    span.set_llm_info(
+                        provider="anthropic",
+                        model=getattr(response, "model", model),
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+
+                    # Capture output
+                    span.set_output(
+                        {"id": getattr(response, "id", None), "model": getattr(response, "model", None)},
+                        preview=_extract_anthropic_response_preview(response),
+                    )
+
+                    return response
+
+                except Exception as e:
+                    span.set_error(e)
+                    raise
+
+            # End auto-created trace
+            if auto_created_trace:
+                current_trace.end()
+
+        anthropic_client.messages.create = traced_create
+        return anthropic_client
 
     def trace(
         self,
