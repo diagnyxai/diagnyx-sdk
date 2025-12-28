@@ -1,12 +1,14 @@
-"""Diagnyx client for LLM tracking."""
+"""Diagnyx client for LLM tracking and tracing."""
 
 import threading
 import time
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
+from .tracing import Tracer
+from .tracing_types import IngestResult, TraceData
 from .types import (
     BatchResult,
     DiagnyxConfig,
@@ -53,8 +55,80 @@ class Diagnyx:
         self._is_flushing = False
         self._flush_timer: Optional[threading.Timer] = None
         self._client = httpx.Client(timeout=30.0)
+        self._tracers: Dict[str, Tracer] = {}
 
         self._start_flush_timer()
+
+    def tracer(
+        self,
+        organization_id: str,
+        environment: Optional[str] = None,
+        default_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Tracer:
+        """Get or create a tracer for an organization.
+
+        Args:
+            organization_id: The organization ID to trace for
+            environment: Optional environment name (production, staging, etc.)
+            default_metadata: Default metadata to include in all traces
+
+        Returns:
+            Tracer instance for creating traces and spans
+        """
+        cache_key = f"{organization_id}:{environment or ''}"
+        if cache_key not in self._tracers:
+            self._tracers[cache_key] = Tracer(
+                client=self,
+                organization_id=organization_id,
+                environment=environment,
+                default_metadata=default_metadata,
+            )
+        return self._tracers[cache_key]
+
+    def _send_traces(
+        self,
+        organization_id: str,
+        traces: List[TraceData],
+    ) -> IngestResult:
+        """Send traces to the backend API.
+
+        Args:
+            organization_id: The organization ID
+            traces: List of trace data to send
+
+        Returns:
+            IngestResult with accepted/failed counts
+        """
+        payload = {"traces": [t.to_dict() for t in traces]}
+
+        last_error: Optional[Exception] = None
+
+        for attempt in range(self.config.max_retries):
+            try:
+                response = self._client.post(
+                    f"{self.config.base_url}/api/v1/organizations/{organization_id}/tracing/ingest",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.config.api_key}",
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                return IngestResult(
+                    accepted=data.get("accepted", len(traces)),
+                    failed=data.get("failed", 0),
+                    errors=data.get("errors"),
+                )
+
+            except Exception as e:
+                last_error = e
+                self._log(f"Trace send attempt {attempt + 1} failed: {e}")
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(2**attempt)
+
+        raise last_error or Exception("Failed to send traces")
 
     def track_call(self, call: LLMCallData) -> None:
         """Track a single LLM call.
