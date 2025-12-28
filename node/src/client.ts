@@ -1,5 +1,6 @@
 import { Tracer } from './tracing';
 import { IngestResult, TraceData } from './tracing-types';
+import { PromptsClient } from './prompts';
 import { DiagnyxConfig, LLMCallData, BatchResult } from './types';
 
 const DEFAULT_BASE_URL = 'https://api.diagnyx.com';
@@ -19,6 +20,7 @@ export class Diagnyx {
   private flushTimer: NodeJS.Timeout | null = null;
   private isFlushing = false;
   private tracers: Map<string, Tracer> = new Map();
+  private promptsClients: Map<string, PromptsClient> = new Map();
 
   /** Configuration options (for use by wrappers) */
   readonly config: {
@@ -63,6 +65,53 @@ export class Diagnyx {
       this.tracers.set(cacheKey, tracer);
     }
     return tracer;
+  }
+
+  /**
+   * Get a prompts client for an organization
+   *
+   * @example
+   * ```typescript
+   * // Get and render a prompt
+   * const prompt = await dx.prompts(orgId).get('summarize-article', {
+   *   variables: { article: articleText },
+   *   environment: 'production',
+   * });
+   *
+   * // Use with OpenAI
+   * const helper = new PromptHelper(prompt);
+   * const response = await openai.chat.completions.create({
+   *   model: prompt.model || 'gpt-4',
+   *   messages: helper.toOpenAIMessages(),
+   *   ...helper.getModelParams(),
+   * });
+   *
+   * // Log usage for analytics
+   * await dx.prompts(orgId).logUsage(
+   *   'summarize-article',
+   *   prompt.version,
+   *   'production',
+   *   {
+   *     latencyMs: responseTimeMs,
+   *     inputTokens: response.usage.prompt_tokens,
+   *     outputTokens: response.usage.completion_tokens,
+   *   }
+   * );
+   * ```
+   */
+  prompts(organizationId: string): PromptsClient {
+    let client = this.promptsClients.get(organizationId);
+    if (!client) {
+      client = new PromptsClient(
+        this.apiKey,
+        organizationId,
+        this.baseUrl,
+        this.maxRetries,
+        this.debug,
+      );
+      this.promptsClients.set(organizationId, client);
+    }
+    return client;
   }
 
   /**
