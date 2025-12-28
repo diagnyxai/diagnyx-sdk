@@ -1,3 +1,5 @@
+import { Tracer } from './tracing';
+import { IngestResult, TraceData } from './tracing-types';
 import { DiagnyxConfig, LLMCallData, BatchResult } from './types';
 
 const DEFAULT_BASE_URL = 'https://api.diagnyx.com';
@@ -16,6 +18,13 @@ export class Diagnyx {
   private buffer: LLMCallData[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private isFlushing = false;
+  private tracers: Map<string, Tracer> = new Map();
+
+  /** Configuration options (for use by wrappers) */
+  readonly config: {
+    captureFullContent: boolean;
+    contentMaxLength: number;
+  };
 
   constructor(config: DiagnyxConfig) {
     if (!config.apiKey) {
@@ -28,8 +37,78 @@ export class Diagnyx {
     this.flushIntervalMs = config.flushIntervalMs || DEFAULT_FLUSH_INTERVAL;
     this.maxRetries = config.maxRetries || DEFAULT_MAX_RETRIES;
     this.debug = config.debug || false;
+    this.config = {
+      captureFullContent: config.captureFullContent || false,
+      contentMaxLength: config.contentMaxLength || 10000,
+    };
 
     this.startFlushTimer();
+  }
+
+  /**
+   * Get or create a tracer for an organization
+   */
+  tracer(
+    organizationId: string,
+    options: { environment?: string; defaultMetadata?: Record<string, unknown> } = {}
+  ): Tracer {
+    const cacheKey = `${organizationId}:${options.environment ?? ''}`;
+    let tracer = this.tracers.get(cacheKey);
+    if (!tracer) {
+      tracer = new Tracer(this, {
+        organizationId,
+        environment: options.environment,
+        defaultMetadata: options.defaultMetadata,
+      });
+      this.tracers.set(cacheKey, tracer);
+    }
+    return tracer;
+  }
+
+  /**
+   * Send traces to the backend API (internal)
+   */
+  async _sendTraces(organizationId: string, traces: TraceData[]): Promise<IngestResult> {
+    const payload = { traces };
+
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
+      try {
+        const response = await fetch(
+          `${this.baseUrl}/api/v1/organizations/${organizationId}/tracing/ingest`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = (await response.json()) as { accepted?: number; failed?: number; errors?: string[] };
+        return {
+          accepted: data.accepted ?? traces.length,
+          failed: data.failed ?? 0,
+          errors: data.errors,
+        };
+      } catch (error) {
+        lastError = error as Error;
+        this.log(`Trace send attempt ${attempt + 1} failed:`, lastError.message);
+
+        if (attempt < this.maxRetries - 1) {
+          await this.sleep(Math.pow(2, attempt) * 1000);
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   /**

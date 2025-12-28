@@ -1,4 +1,11 @@
+// Client
 export { Diagnyx } from './client';
+
+// Tracing
+export { Tracer, Trace, Span, getCurrentTrace, getCurrentSpan } from './tracing';
+export * from './tracing-types';
+
+// Cost tracking
 export { wrapOpenAI, wrapAnthropic, trackWithTiming } from './wrappers';
 export * from './types';
 
