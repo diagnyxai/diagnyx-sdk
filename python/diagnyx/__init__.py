@@ -11,6 +11,13 @@ from .tracing_types import (
     TraceData,
     TraceStatus,
 )
+from .prompts import (
+    PromptsClient,
+    PromptTemplate,
+    PromptVersion,
+    PromptVariable,
+    RenderedPrompt,
+)
 from .types import CallStatus, LLMCallData, LLMProvider
 from .wrappers import track_with_timing, wrap_anthropic, wrap_openai
 
@@ -31,6 +38,12 @@ __all__ = [
     "SpanStatus",
     "TraceStatus",
     "IngestResult",
+    # Prompts
+    "PromptsClient",
+    "PromptTemplate",
+    "PromptVersion",
+    "PromptVariable",
+    "RenderedPrompt",
     # Cost tracking types
     "LLMCallData",
     "CallStatus",

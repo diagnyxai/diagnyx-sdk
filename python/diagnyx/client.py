@@ -9,6 +9,7 @@ import httpx
 
 from .tracing import Tracer
 from .tracing_types import IngestResult, TraceData
+from .prompts import PromptsClient
 from .types import (
     BatchResult,
     DiagnyxConfig,
@@ -56,6 +57,7 @@ class Diagnyx:
         self._flush_timer: Optional[threading.Timer] = None
         self._client = httpx.Client(timeout=30.0)
         self._tracers: Dict[str, Tracer] = {}
+        self._prompts_clients: Dict[str, PromptsClient] = {}
 
         self._start_flush_timer()
 
@@ -84,6 +86,50 @@ class Diagnyx:
                 default_metadata=default_metadata,
             )
         return self._tracers[cache_key]
+
+    def prompts(self, organization_id: str) -> PromptsClient:
+        """Get a prompts client for an organization.
+
+        Args:
+            organization_id: The organization ID
+
+        Returns:
+            PromptsClient for managing prompts
+
+        Example:
+            >>> # Get and render a prompt
+            >>> prompt = dx.prompts(org_id).get(
+            ...     "summarize-article",
+            ...     variables={"article": article_text},
+            ...     environment="production"
+            ... )
+            >>>
+            >>> # Use with OpenAI
+            >>> response = openai.chat.completions.create(
+            ...     model=prompt.model or "gpt-4",
+            ...     messages=prompt.to_openai_messages(),
+            ...     **prompt.get_model_params()
+            ... )
+            >>>
+            >>> # Log usage for analytics
+            >>> dx.prompts(org_id).log_usage(
+            ...     slug="summarize-article",
+            ...     version=prompt.version,
+            ...     environment="production",
+            ...     latency_ms=response_time_ms,
+            ...     input_tokens=response.usage.prompt_tokens,
+            ...     output_tokens=response.usage.completion_tokens,
+            ... )
+        """
+        if organization_id not in self._prompts_clients:
+            self._prompts_clients[organization_id] = PromptsClient(
+                api_key=self.config.api_key,
+                organization_id=organization_id,
+                base_url=self.config.base_url,
+                max_retries=self.config.max_retries,
+                debug=self.config.debug,
+            )
+        return self._prompts_clients[organization_id]
 
     def _send_traces(
         self,
