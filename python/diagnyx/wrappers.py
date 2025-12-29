@@ -72,8 +72,7 @@ def _extract_anthropic_prompt(
             parts.append(f"[system]: {system}")
         elif isinstance(system, list):
             system_text = "".join(
-                s.get("text", "") if s.get("type") == "text" else json.dumps(s)
-                for s in system
+                s.get("text", "") if s.get("type") == "text" else json.dumps(s) for s in system
             )
             parts.append(f"[system]: {system_text}")
 
@@ -164,12 +163,8 @@ def wrap_openai(
             full_response = None
             if diagnyx.config.capture_full_content:
                 messages = kwargs.get("messages")
-                full_prompt = _extract_openai_prompt(
-                    messages, diagnyx.config.content_max_length
-                )
-                full_response = _extract_openai_response(
-                    result, diagnyx.config.content_max_length
-                )
+                full_prompt = _extract_openai_prompt(messages, diagnyx.config.content_max_length)
+                full_response = _extract_openai_response(result, diagnyx.config.content_max_length)
 
             if usage:
                 call_data = LLMCallData(

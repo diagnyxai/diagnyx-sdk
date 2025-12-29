@@ -132,9 +132,10 @@ export class PromptHelper {
   /**
    * Convert to Anthropic messages format
    */
-  toAnthropicMessages(
-    userContent?: string,
-  ): { system: string | undefined; messages: Array<{ role: string; content: string }> } {
+  toAnthropicMessages(userContent?: string): {
+    system: string | undefined;
+    messages: Array<{ role: string; content: string }>;
+  } {
     const messages: Array<{ role: string; content: string }> = [];
 
     if (userContent) {
@@ -165,8 +166,7 @@ export class PromptHelper {
     if (this.prompt.topP !== null) params.top_p = this.prompt.topP;
     if (this.prompt.frequencyPenalty !== null)
       params.frequency_penalty = this.prompt.frequencyPenalty;
-    if (this.prompt.presencePenalty !== null)
-      params.presence_penalty = this.prompt.presencePenalty;
+    if (this.prompt.presencePenalty !== null) params.presence_penalty = this.prompt.presencePenalty;
     if (this.prompt.stopSequences.length > 0) params.stop = this.prompt.stopSequences;
     if (this.prompt.responseFormat) params.response_format = this.prompt.responseFormat;
 
@@ -186,7 +186,7 @@ export class PromptsClient {
     private readonly organizationId: string,
     private readonly baseUrl: string = 'https://api.diagnyx.io',
     private readonly maxRetries: number = 3,
-    private readonly debug: boolean = false,
+    private readonly debug: boolean = false
   ) {}
 
   /**
@@ -228,7 +228,7 @@ export class PromptsClient {
     const data = await this.request<RenderedPrompt>(
       'POST',
       `/api/v1/organizations/${this.organizationId}/prompts/${slug}/render`,
-      payload,
+      payload
     );
 
     // Cache the result
@@ -240,13 +240,18 @@ export class PromptsClient {
   /**
    * List prompt templates
    */
-  async list(options: {
-    search?: string;
-    tags?: string[];
-    includeArchived?: boolean;
-    page?: number;
-    limit?: number;
-  } = {}): Promise<{ data: PromptTemplate[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+  async list(
+    options: {
+      search?: string;
+      tags?: string[];
+      includeArchived?: boolean;
+      page?: number;
+      limit?: number;
+    } = {}
+  ): Promise<{
+    data: PromptTemplate[];
+    pagination: { total: number; page: number; limit: number; totalPages: number };
+  }> {
     const params = new URLSearchParams();
 
     if (options.search) params.set('search', options.search);
@@ -265,10 +270,7 @@ export class PromptsClient {
    * Get a prompt template with all versions and deployments
    */
   async getTemplate(slug: string): Promise<PromptTemplate> {
-    return this.request(
-      'GET',
-      `/api/v1/organizations/${this.organizationId}/prompts/${slug}`,
-    );
+    return this.request('GET', `/api/v1/organizations/${this.organizationId}/prompts/${slug}`);
   }
 
   /**
@@ -278,7 +280,7 @@ export class PromptsClient {
     slug: string,
     version: number,
     environment: 'production' | 'staging' | 'development',
-    options: LogUsageOptions = {},
+    options: LogUsageOptions = {}
   ): Promise<void> {
     const payload: Record<string, unknown> = {
       environment,
@@ -301,7 +303,7 @@ export class PromptsClient {
     await this.request(
       'POST',
       `/api/v1/organizations/${this.organizationId}/prompts/${slug}/versions/${version}/usage`,
-      payload,
+      payload
     );
   }
 
@@ -311,7 +313,7 @@ export class PromptsClient {
   async selectExperimentVariant(slug: string, experimentId: string): Promise<ExperimentVariant> {
     return this.request(
       'POST',
-      `/api/v1/organizations/${this.organizationId}/prompts/${slug}/experiments/${experimentId}/select-variant`,
+      `/api/v1/organizations/${this.organizationId}/prompts/${slug}/experiments/${experimentId}/select-variant`
     );
   }
 
@@ -322,12 +324,12 @@ export class PromptsClient {
     slug: string,
     experimentId: string,
     variantId: string,
-    metrics?: { latencyMs?: number; tokens?: number; costUsd?: number },
+    metrics?: { latencyMs?: number; tokens?: number; costUsd?: number }
   ): Promise<void> {
     await this.request(
       'POST',
       `/api/v1/organizations/${this.organizationId}/prompts/${slug}/experiments/${experimentId}/variants/${variantId}/convert`,
-      metrics || {},
+      metrics || {}
     );
   }
 
@@ -349,7 +351,7 @@ export class PromptsClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: Record<string, unknown>,
+    body?: Record<string, unknown>
   ): Promise<T> {
     let lastError: Error | null = null;
 

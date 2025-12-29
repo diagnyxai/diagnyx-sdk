@@ -75,7 +75,13 @@ export class Span {
   private _events: SpanEvent[] = [];
   private _ended = false;
 
-  constructor(trace: Trace, name: string, spanType: SpanType, parent: Span | null, metadata?: Record<string, unknown>) {
+  constructor(
+    trace: Trace,
+    name: string,
+    spanType: SpanType,
+    parent: Span | null,
+    metadata?: Record<string, unknown>
+  ) {
     this.trace = trace;
     this.spanId = generateId();
     this.name = name;
@@ -470,9 +476,7 @@ function extractAnthropicResponsePreview(response: unknown, maxLength = 500): st
   try {
     const resp = response as { content?: Array<{ type?: string; text?: string }> };
     const content = resp.content ?? [];
-    const parts = content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text ?? '');
+    const parts = content.filter((block) => block.type === 'text').map((block) => block.text ?? '');
     return parts.join('').slice(0, maxLength);
   } catch {
     // Ignore errors
@@ -578,16 +582,18 @@ export class Tracer {
    * const response = await client.chat.completions.create(...); // Auto-traced
    * ```
    */
-  wrapOpenAI<T extends { chat: { completions: { create: (...args: unknown[]) => Promise<unknown> } } }>(
-    openaiClient: T
-  ): T {
-    const tracer = this;
+  wrapOpenAI<
+    T extends { chat: { completions: { create: (...args: unknown[]) => Promise<unknown> } } },
+  >(openaiClient: T): T {
     const originalCreate = openaiClient.chat.completions.create.bind(openaiClient.chat.completions);
 
     const tracedCreate = async (...args: unknown[]): Promise<unknown> => {
       const options = (args[0] ?? {}) as {
         model?: string;
-        messages?: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>;
+        messages?: Array<{
+          role?: string;
+          content?: string | Array<{ type?: string; text?: string }>;
+        }>;
       };
 
       // Get or create trace context
@@ -595,7 +601,7 @@ export class Tracer {
       let autoCreatedTrace = false;
 
       if (!currentTrace) {
-        currentTrace = tracer.trace({ name: 'openai-request' });
+        currentTrace = this.trace({ name: 'openai-request' });
         autoCreatedTrace = true;
       }
 
@@ -672,14 +678,16 @@ export class Tracer {
   wrapAnthropic<T extends { messages: { create: (...args: unknown[]) => Promise<unknown> } }>(
     anthropicClient: T
   ): T {
-    const tracer = this;
     const originalCreate = anthropicClient.messages.create.bind(anthropicClient.messages);
 
     const tracedCreate = async (...args: unknown[]): Promise<unknown> => {
       const options = (args[0] ?? {}) as {
         model?: string;
         system?: string;
-        messages?: Array<{ role?: string; content?: string | Array<{ type?: string; text?: string }> }>;
+        messages?: Array<{
+          role?: string;
+          content?: string | Array<{ type?: string; text?: string }>;
+        }>;
       };
 
       // Get or create trace context
@@ -687,7 +695,7 @@ export class Tracer {
       let autoCreatedTrace = false;
 
       if (!currentTrace) {
-        currentTrace = tracer.trace({ name: 'anthropic-request' });
+        currentTrace = this.trace({ name: 'anthropic-request' });
         autoCreatedTrace = true;
       }
 
@@ -698,10 +706,7 @@ export class Tracer {
       // Capture input
       const system = options.system;
       const messages = options.messages ?? [];
-      span.setInput(
-        { system, messages, model },
-        extractAnthropicMessagesPreview(system, messages)
-      );
+      span.setInput({ system, messages, model }, extractAnthropicMessagesPreview(system, messages));
 
       try {
         const response = await traceStorage.run(currentTrace, () =>
@@ -726,7 +731,10 @@ export class Tracer {
         });
 
         // Capture output
-        span.setOutput({ id: resp.id, model: resp.model }, extractAnthropicResponsePreview(response));
+        span.setOutput(
+          { id: resp.id, model: resp.model },
+          extractAnthropicResponsePreview(response)
+        );
 
         span.end();
 

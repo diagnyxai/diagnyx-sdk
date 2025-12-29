@@ -87,7 +87,9 @@ class SpanData:
         data = {
             "spanId": self.span_id,
             "name": self.name,
-            "spanType": self.span_type.value if isinstance(self.span_type, SpanType) else self.span_type,
+            "spanType": self.span_type.value
+            if isinstance(self.span_type, SpanType)
+            else self.span_type,
             "startTime": self.start_time,
             "status": self.status.value if isinstance(self.status, SpanStatus) else self.status,
         }

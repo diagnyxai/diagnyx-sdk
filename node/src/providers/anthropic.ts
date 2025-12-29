@@ -102,10 +102,7 @@ function extractAnthropicPrompt(
 /**
  * Extract response content from Anthropic message
  */
-function extractAnthropicResponse(
-  content: unknown[],
-  maxLength?: number
-): string | undefined {
+function extractAnthropicResponse(content: unknown[], maxLength?: number): string | undefined {
   if (!content || content.length === 0) return undefined;
 
   const result = content

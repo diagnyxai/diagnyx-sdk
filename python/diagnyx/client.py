@@ -7,9 +7,9 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from .prompts import PromptsClient
 from .tracing import Tracer
 from .tracing_types import IngestResult, TraceData
-from .prompts import PromptsClient
 from .types import (
     BatchResult,
     DiagnyxConfig,
