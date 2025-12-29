@@ -92,6 +92,7 @@ class Span:
             self.input_preview = input_data[:max_preview_length]
         elif isinstance(input_data, (dict, list)):
             import json
+
             preview_str = json.dumps(input_data)[:max_preview_length]
             self.input_preview = preview_str
         return self
@@ -110,6 +111,7 @@ class Span:
             self.output_preview = output_data[:max_preview_length]
         elif isinstance(output_data, (dict, list)):
             import json
+
             preview_str = json.dumps(output_data)[:max_preview_length]
             self.output_preview = preview_str
         return self
@@ -372,7 +374,9 @@ def _extract_openai_messages_preview(messages: List[Dict], max_length: int = 500
             parts.append(f"[{role}]: {content[:100]}")
         elif isinstance(content, list):
             text = " ".join(
-                c.get("text", "")[:50] for c in content if isinstance(c, dict) and c.get("type") == "text"
+                c.get("text", "")[:50]
+                for c in content
+                if isinstance(c, dict) and c.get("type") == "text"
             )
             parts.append(f"[{role}]: {text}")
     return "\n".join(parts)[:max_length]
@@ -406,7 +410,9 @@ def _extract_anthropic_messages_preview(
             parts.append(f"[{role}]: {content[:100]}")
         elif isinstance(content, list):
             text = " ".join(
-                c.get("text", "")[:50] for c in content if isinstance(c, dict) and c.get("type") == "text"
+                c.get("text", "")[:50]
+                for c in content
+                if isinstance(c, dict) and c.get("type") == "text"
             )
             parts.append(f"[{role}]: {text}")
     return "\n".join(parts)[:max_length]
@@ -499,7 +505,10 @@ class Tracer:
 
                     # Capture output
                     span.set_output(
-                        {"id": getattr(response, "id", None), "model": getattr(response, "model", None)},
+                        {
+                            "id": getattr(response, "id", None),
+                            "model": getattr(response, "model", None),
+                        },
                         preview=_extract_openai_response_preview(response),
                     )
 
@@ -574,7 +583,10 @@ class Tracer:
 
                     # Capture output
                     span.set_output(
-                        {"id": getattr(response, "id", None), "model": getattr(response, "model", None)},
+                        {
+                            "id": getattr(response, "id", None),
+                            "model": getattr(response, "model", None),
+                        },
                         preview=_extract_anthropic_response_preview(response),
                     )
 
