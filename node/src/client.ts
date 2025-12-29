@@ -107,7 +107,7 @@ export class Diagnyx {
         organizationId,
         this.baseUrl,
         this.maxRetries,
-        this.debug,
+        this.debug
       );
       this.promptsClients.set(organizationId, client);
     }
@@ -141,7 +141,11 @@ export class Diagnyx {
           throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
-        const data = (await response.json()) as { accepted?: number; failed?: number; errors?: string[] };
+        const data = (await response.json()) as {
+          accepted?: number;
+          failed?: number;
+          errors?: string[];
+        };
         return {
           accepted: data.accepted ?? traces.length,
           failed: data.failed ?? 0,

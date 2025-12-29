@@ -1,6 +1,13 @@
 """Diagnyx SDK for LLM tracking, tracing, and monitoring."""
 
 from .client import Diagnyx
+from .prompts import (
+    PromptsClient,
+    PromptTemplate,
+    PromptVariable,
+    PromptVersion,
+    RenderedPrompt,
+)
 from .tracing import Span, Trace, Tracer, trace
 from .tracing_types import (
     IngestResult,
@@ -10,13 +17,6 @@ from .tracing_types import (
     SpanType,
     TraceData,
     TraceStatus,
-)
-from .prompts import (
-    PromptsClient,
-    PromptTemplate,
-    PromptVersion,
-    PromptVariable,
-    RenderedPrompt,
 )
 from .types import CallStatus, LLMCallData, LLMProvider
 from .wrappers import track_with_timing, wrap_anthropic, wrap_openai

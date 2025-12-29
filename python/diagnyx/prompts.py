@@ -3,7 +3,7 @@
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -346,9 +346,7 @@ class PromptsClient:
                 provider=v.get("provider"),
                 temperature=v.get("temperature"),
                 max_tokens=v.get("maxTokens"),
-                variables=[
-                    PromptVariable(**var) for var in (v.get("variables") or [])
-                ],
+                variables=[PromptVariable(**var) for var in (v.get("variables") or [])],
                 commit_message=v.get("commitMessage"),
             )
             for v in data.get("versions", [])

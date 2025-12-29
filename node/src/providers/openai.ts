@@ -71,7 +71,10 @@ type CreateChatCompletionFn = (options: {
 /**
  * Extract prompt content from OpenAI messages array
  */
-function extractPromptContent(messages?: OpenAIMessageInput[], maxLength?: number): string | undefined {
+function extractPromptContent(
+  messages?: OpenAIMessageInput[],
+  maxLength?: number
+): string | undefined {
   if (!messages || messages.length === 0) return undefined;
 
   const content = messages
