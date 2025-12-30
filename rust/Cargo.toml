@@ -23,6 +23,7 @@ thiserror = "1.0"
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.5"
+tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "time", "macros"] }
 
 [features]
 default = []

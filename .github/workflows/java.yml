@@ -25,5 +25,5 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
-      - name: Verify build
-        run: mvn -B compile -DskipTests
+      - name: Build and run tests
+        run: mvn -B test
