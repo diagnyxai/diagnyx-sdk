@@ -105,6 +105,36 @@ client.track(LLMCall::builder()
 client.shutdown().await?;
 ```
 
+## LangChain Integration
+
+Native callback handlers for LangChain and LangChain.js:
+
+### Python (LangChain)
+
+```python
+from diagnyx import Diagnyx, DiagnyxCallbackHandler
+from langchain_openai import ChatOpenAI
+
+diagnyx = Diagnyx(api_key="dx_live_xxx")
+handler = DiagnyxCallbackHandler(diagnyx, project_id="my-project")
+
+llm = ChatOpenAI(model="gpt-4", callbacks=[handler])
+response = llm.invoke("Hello, world!")
+```
+
+### Node.js (LangChain.js)
+
+```typescript
+import { Diagnyx, DiagnyxCallbackHandler } from '@diagnyx/node';
+import { ChatOpenAI } from '@langchain/openai';
+
+const diagnyx = new Diagnyx({ apiKey: 'dx_live_xxx' });
+const handler = new DiagnyxCallbackHandler(diagnyx, { projectId: 'my-project' });
+
+const llm = new ChatOpenAI({ model: 'gpt-4', callbacks: [handler] });
+const response = await llm.invoke('Hello, world!');
+```
+
 ## Features
 
 All SDKs include:
@@ -114,6 +144,7 @@ All SDKs include:
 - **Non-blocking** - Tracking never slows down your LLM calls
 - **Graceful Shutdown** - Flush remaining calls on exit
 - **Debug Mode** - Optional logging for troubleshooting
+- **LangChain Support** - Native callback handlers for LangChain/LangChain.js
 
 ## Supported Providers
 
