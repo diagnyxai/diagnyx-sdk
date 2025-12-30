@@ -1,6 +1,9 @@
 // Client
 export { Diagnyx } from './client';
 
+// Callbacks
+export { DiagnyxCallbackHandler, DiagnyxCallbackHandlerOptions } from './callbacks';
+
 // Tracing
 export { Tracer, Trace, Span, getCurrentTrace, getCurrentSpan } from './tracing';
 export * from './tracing-types';

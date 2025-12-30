@@ -1,5 +1,6 @@
 """Diagnyx SDK for LLM tracking, tracing, and monitoring."""
 
+from .callbacks import DiagnyxCallbackHandler
 from .client import Diagnyx
 from .prompts import (
     PromptsClient,
@@ -25,6 +26,8 @@ __version__ = "0.1.0"
 __all__ = [
     # Client
     "Diagnyx",
+    # Callbacks
+    "DiagnyxCallbackHandler",
     # Tracing
     "Tracer",
     "Trace",
