@@ -322,3 +322,257 @@ pub async fn track_call_with_content(
 
     client.track(builder.build()).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CallStatus, DiagnyxConfig, LLMCall, Provider};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn create_mock_client(server: &MockServer) -> DiagnyxClient {
+        DiagnyxClient::with_config(
+            DiagnyxConfig::new("test-api-key")
+                .base_url(&server.uri())
+                .flush_interval_ms(60000) // Disable auto-flush
+                .max_retries(1),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_create_client_with_api_key() {
+        let client = DiagnyxClient::new("test-api-key");
+        assert_eq!(client.buffer_size().await, 0);
+        let _ = client.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_track_adds_to_buffer() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tracked": 1,
+                "total_cost": 0.001,
+                "total_tokens": 150,
+                "ids": ["id-1"]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server).await;
+
+        let call = LLMCall::builder()
+            .provider(Provider::OpenAI)
+            .model("gpt-4")
+            .input_tokens(100)
+            .output_tokens(50)
+            .status(CallStatus::Success)
+            .build();
+
+        client.track(call).await;
+
+        assert_eq!(client.buffer_size().await, 1);
+        let _ = client.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_track_all_adds_multiple() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tracked": 3,
+                "total_cost": 0.003,
+                "total_tokens": 450,
+                "ids": ["id-1", "id-2", "id-3"]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server).await;
+
+        let calls = vec![
+            LLMCall::builder()
+                .provider(Provider::OpenAI)
+                .model("gpt-4")
+                .build(),
+            LLMCall::builder()
+                .provider(Provider::Anthropic)
+                .model("claude-3")
+                .build(),
+            LLMCall::builder()
+                .provider(Provider::Google)
+                .model("gemini")
+                .build(),
+        ];
+
+        client.track_all(calls).await;
+
+        assert_eq!(client.buffer_size().await, 3);
+        let _ = client.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_flush_sends_to_api() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .and(header("Authorization", "Bearer test-api-key"))
+            .and(header("Content-Type", "application/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tracked": 1
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server).await;
+
+        let call = LLMCall::builder()
+            .provider(Provider::OpenAI)
+            .model("gpt-4")
+            .input_tokens(100)
+            .output_tokens(50)
+            .build();
+
+        client.track(call).await;
+        assert_eq!(client.buffer_size().await, 1);
+
+        let result = client.flush().await;
+        assert!(result.is_ok());
+        assert_eq!(client.buffer_size().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_flush_empty_buffer_succeeds() {
+        let server = MockServer::start().await;
+        let client = create_mock_client(&server).await;
+
+        // Flush with empty buffer should succeed
+        let result = client.flush().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_flush_restores_buffer_on_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "error": "Server error"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server).await;
+
+        let call = LLMCall::builder()
+            .provider(Provider::OpenAI)
+            .model("gpt-4")
+            .build();
+
+        client.track(call).await;
+        assert_eq!(client.buffer_size().await, 1);
+
+        let result = client.flush().await;
+        assert!(result.is_err());
+
+        // Buffer should be restored
+        assert_eq!(client.buffer_size().await, 1);
+        let _ = client.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_auto_flush_when_batch_size_reached() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tracked": 5
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = DiagnyxClient::with_config(
+            DiagnyxConfig::new("test-api-key")
+                .base_url(&server.uri())
+                .batch_size(5)
+                .flush_interval_ms(60000),
+        );
+
+        for _ in 0..5 {
+            let call = LLMCall::builder()
+                .provider(Provider::OpenAI)
+                .model("gpt-4")
+                .build();
+            client.track(call).await;
+        }
+
+        // Wait a bit for async flush
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(client.buffer_size().await, 0);
+        let _ = client.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_flushes_buffer() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tracked": 1
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server).await;
+
+        let call = LLMCall::builder()
+            .provider(Provider::OpenAI)
+            .model("gpt-4")
+            .build();
+
+        client.track(call).await;
+        assert_eq!(client.buffer_size().await, 1);
+
+        let result = client.shutdown().await;
+        assert!(result.is_ok());
+        assert_eq!(client.buffer_size().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_no_retry_on_client_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/ingest/llm/batch"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "error": "Bad request"
+            })))
+            .expect(1) // Should only be called once (no retries on 4xx)
+            .mount(&server)
+            .await;
+
+        let client = DiagnyxClient::with_config(
+            DiagnyxConfig::new("test-api-key")
+                .base_url(&server.uri())
+                .flush_interval_ms(60000)
+                .max_retries(3), // Set retries to 3 but it should still only call once
+        );
+
+        let call = LLMCall::builder()
+            .provider(Provider::OpenAI)
+            .model("gpt-4")
+            .build();
+
+        client.track(call).await;
+        let result = client.flush().await;
+
+        assert!(result.is_err());
+        // Buffer should be restored
+        assert_eq!(client.buffer_size().await, 1);
+    }
+}
