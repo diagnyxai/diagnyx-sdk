@@ -105,6 +105,89 @@ client.track(LLMCall::builder()
 client.shutdown().await?;
 ```
 
+## LangChain Integration
+
+Native callback handlers for LangChain across all supported languages:
+
+### Python (LangChain)
+
+```python
+from diagnyx import Diagnyx, DiagnyxCallbackHandler
+from langchain_openai import ChatOpenAI
+
+diagnyx = Diagnyx(api_key="dx_live_xxx")
+handler = DiagnyxCallbackHandler(diagnyx, project_id="my-project")
+
+llm = ChatOpenAI(model="gpt-4", callbacks=[handler])
+response = llm.invoke("Hello, world!")
+```
+
+### Node.js (LangChain.js)
+
+```typescript
+import { Diagnyx, DiagnyxCallbackHandler } from '@diagnyx/node';
+import { ChatOpenAI } from '@langchain/openai';
+
+const diagnyx = new Diagnyx({ apiKey: 'dx_live_xxx' });
+const handler = new DiagnyxCallbackHandler(diagnyx, { projectId: 'my-project' });
+
+const llm = new ChatOpenAI({ model: 'gpt-4', callbacks: [handler] });
+const response = await llm.invoke('Hello, world!');
+```
+
+### Go (langchaingo)
+
+```go
+import (
+    "github.com/diagnyxai/diagnyx-go"
+    "github.com/diagnyxai/diagnyx-go/callbacks"
+    "github.com/tmc/langchaingo/llms/openai"
+)
+
+dx := diagnyx.NewClient("dx_live_xxx")
+defer dx.Close()
+
+handler := callbacks.NewDiagnyxHandler(dx,
+    callbacks.WithProjectID("my-project"),
+    callbacks.WithEnvironment("production"),
+)
+
+llm, _ := openai.New(openai.WithModel("gpt-4"))
+// Use handler with langchaingo callbacks
+```
+
+### Java (LangChain4j)
+
+```java
+import io.diagnyx.sdk.*;
+import io.diagnyx.sdk.callbacks.DiagnyxChatModelListener;
+
+try (DiagnyxClient diagnyx = DiagnyxClient.create("dx_live_xxx")) {
+    DiagnyxChatModelListener listener = new DiagnyxChatModelListener(diagnyx)
+        .projectId("my-project")
+        .environment("production");
+
+    // Use listener with LangChain4j ChatLanguageModel
+}
+```
+
+### Rust (langchain-rust)
+
+```rust
+use diagnyx::{DiagnyxClient, DiagnyxCallbackHandler};
+use std::sync::Arc;
+
+let client = Arc::new(DiagnyxClient::new("dx_live_xxx"));
+let handler = DiagnyxCallbackHandler::new(client.clone())
+    .with_project_id("my-project")
+    .with_environment("production");
+
+// Track LLM calls
+let run_id = handler.on_llm_start("gpt-4", "Hello!");
+// ... LLM call happens ...
+handler.on_llm_end(&run_id, "gpt-4", "Hi there!", 10, 5);
+```
+
 ## Features
 
 All SDKs include:
@@ -114,6 +197,7 @@ All SDKs include:
 - **Non-blocking** - Tracking never slows down your LLM calls
 - **Graceful Shutdown** - Flush remaining calls on exit
 - **Debug Mode** - Optional logging for troubleshooting
+- **LangChain Support** - Native callback handlers for LangChain/LangChain.js
 
 ## Supported Providers
 
