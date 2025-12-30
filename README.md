@@ -107,7 +107,7 @@ client.shutdown().await?;
 
 ## LangChain Integration
 
-Native callback handlers for LangChain and LangChain.js:
+Native callback handlers for LangChain across all supported languages:
 
 ### Python (LangChain)
 
@@ -133,6 +133,59 @@ const handler = new DiagnyxCallbackHandler(diagnyx, { projectId: 'my-project' })
 
 const llm = new ChatOpenAI({ model: 'gpt-4', callbacks: [handler] });
 const response = await llm.invoke('Hello, world!');
+```
+
+### Go (langchaingo)
+
+```go
+import (
+    "github.com/diagnyxai/diagnyx-go"
+    "github.com/diagnyxai/diagnyx-go/callbacks"
+    "github.com/tmc/langchaingo/llms/openai"
+)
+
+dx := diagnyx.NewClient("dx_live_xxx")
+defer dx.Close()
+
+handler := callbacks.NewDiagnyxHandler(dx,
+    callbacks.WithProjectID("my-project"),
+    callbacks.WithEnvironment("production"),
+)
+
+llm, _ := openai.New(openai.WithModel("gpt-4"))
+// Use handler with langchaingo callbacks
+```
+
+### Java (LangChain4j)
+
+```java
+import io.diagnyx.sdk.*;
+import io.diagnyx.sdk.callbacks.DiagnyxChatModelListener;
+
+try (DiagnyxClient diagnyx = DiagnyxClient.create("dx_live_xxx")) {
+    DiagnyxChatModelListener listener = new DiagnyxChatModelListener(diagnyx)
+        .projectId("my-project")
+        .environment("production");
+
+    // Use listener with LangChain4j ChatLanguageModel
+}
+```
+
+### Rust (langchain-rust)
+
+```rust
+use diagnyx::{DiagnyxClient, DiagnyxCallbackHandler};
+use std::sync::Arc;
+
+let client = Arc::new(DiagnyxClient::new("dx_live_xxx"));
+let handler = DiagnyxCallbackHandler::new(client.clone())
+    .with_project_id("my-project")
+    .with_environment("production");
+
+// Track LLM calls
+let run_id = handler.on_llm_start("gpt-4", "Hello!");
+// ... LLM call happens ...
+handler.on_llm_end(&run_id, "gpt-4", "Hi there!", 10, 5);
 ```
 
 ## Features
