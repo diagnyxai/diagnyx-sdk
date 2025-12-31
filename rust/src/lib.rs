@@ -23,11 +23,47 @@
 //!     client.flush().await.unwrap();
 //! }
 //! ```
+//!
+//! # Streaming Guardrails
+//!
+//! ```rust,no_run
+//! use diagnyx::guardrails::{StreamingGuardrails, StreamingGuardrailsConfig, StreamingEvent};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = StreamingGuardrailsConfig::new(
+//!         "dx_live_your_api_key",
+//!         "org-123",
+//!         "proj-456",
+//!     );
+//!
+//!     let client = StreamingGuardrails::new(config);
+//!
+//!     // Start a session and evaluate tokens
+//!     let session = client.start_session(Some("What is 2+2?")).await?;
+//!
+//!     for token in vec!["The", "answer", "is", "4"] {
+//!         match client.evaluate_token(token).await? {
+//!             StreamingEvent::TokenAllowed(data) => println!("OK: {}", data.token),
+//!             StreamingEvent::EarlyTermination(data) => {
+//!                 println!("Blocked: {}", data.reason);
+//!                 break;
+//!             }
+//!             _ => {}
+//!         }
+//!     }
+//!
+//!     let result = client.complete_session().await?;
+//!     println!("Allowed: {}", result.allowed);
+//!     Ok(())
+//! }
+//! ```
 
 mod client;
 mod types;
 mod error;
 pub mod callbacks;
+pub mod guardrails;
 
 pub use client::DiagnyxClient;
 pub use types::*;

@@ -2,6 +2,16 @@
 
 from .callbacks import DiagnyxCallbackHandler
 from .client import Diagnyx
+from .guardrails import (
+    EnforcementLevel,
+    GuardrailSession,
+    GuardrailViolation,
+    StreamingGuardrails,
+    StreamingEvent,
+    StreamingEventType,
+    stream_with_guardrails,
+    wrap_streaming_response,
+)
 from .prompts import (
     PromptsClient,
     PromptTemplate,
@@ -28,6 +38,15 @@ __all__ = [
     "Diagnyx",
     # Callbacks
     "DiagnyxCallbackHandler",
+    # Guardrails
+    "StreamingGuardrails",
+    "StreamingEvent",
+    "StreamingEventType",
+    "EnforcementLevel",
+    "GuardrailViolation",
+    "GuardrailSession",
+    "stream_with_guardrails",
+    "wrap_streaming_response",
     # Tracing
     "Tracer",
     "Trace",
