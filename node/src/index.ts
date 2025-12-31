@@ -22,6 +22,23 @@ export {
   ExperimentVariant,
 } from './prompts';
 
+// Guardrails
+export {
+  GuardrailViolationError,
+  StreamingGuardrails,
+  streamWithGuardrails,
+  wrapStreamingResponse,
+} from './guardrails';
+export type {
+  EnforcementLevel,
+  GuardrailSession,
+  GuardrailViolation,
+  StreamingEvaluationEvent,
+  StreamingEventType,
+  StreamingGuardrailsConfig,
+  StreamWithGuardrailsOptions,
+} from './guardrails';
+
 // Cost tracking
 export { wrapOpenAI, wrapAnthropic, trackWithTiming } from './wrappers';
 export * from './types';
