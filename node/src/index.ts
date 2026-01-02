@@ -48,3 +48,15 @@ export {
   wrapOpenAI as wrapOpenAIStreaming,
   wrapAnthropic as wrapAnthropicStreaming,
 } from './providers';
+
+// Feedback
+export { FeedbackClient } from './feedback';
+export type {
+  FeedbackType,
+  FeedbackSentiment,
+  Feedback,
+  FeedbackOptions,
+  FeedbackSummary,
+  ListFeedbackOptions,
+  ListFeedbackResult,
+} from './feedback';

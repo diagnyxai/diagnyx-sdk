@@ -31,6 +31,13 @@ from .tracing_types import (
 )
 from .types import CallStatus, LLMCallData, LLMProvider
 from .wrappers import track_with_timing, wrap_anthropic, wrap_openai
+from .feedback import (
+    FeedbackClient,
+    Feedback,
+    FeedbackSummary,
+    FeedbackType,
+    FeedbackSentiment,
+)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -74,4 +81,10 @@ __all__ = [
     "wrap_openai",
     "wrap_anthropic",
     "track_with_timing",
+    # Feedback
+    "FeedbackClient",
+    "Feedback",
+    "FeedbackSummary",
+    "FeedbackType",
+    "FeedbackSentiment",
 ]
