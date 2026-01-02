@@ -64,8 +64,14 @@ mod types;
 mod error;
 pub mod callbacks;
 pub mod guardrails;
+pub mod feedback;
 
 pub use client::DiagnyxClient;
 pub use types::*;
 pub use error::DiagnyxError;
 pub use callbacks::{DiagnyxCallbackHandler, CallbackOptions};
+pub use feedback::{
+    FeedbackClient, FeedbackClientConfig, Feedback, FeedbackType, FeedbackSentiment,
+    FeedbackOptions, FeedbackOptionsBuilder, FeedbackSummary, ListFeedbackOptions,
+    FeedbackListResult,
+};

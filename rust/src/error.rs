@@ -17,4 +17,7 @@ pub enum DiagnyxError {
 
     #[error("Max retries exceeded")]
     MaxRetriesExceeded,
+
+    #[error("Guardrail violation: {0}")]
+    ViolationError(Box<dyn std::error::Error + Send + Sync>),
 }
