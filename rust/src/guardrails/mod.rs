@@ -47,6 +47,7 @@
 //! ```
 
 mod client;
+pub mod streaming;
 mod types;
 
 pub use client::{stream_with_guardrails, GuardrailViolationError, StreamingGuardrails};
@@ -54,4 +55,14 @@ pub use types::{
     EarlyTerminationData, EnforcementLevel, ErrorData, GuardrailSession, GuardrailViolation,
     SessionCompleteData, SessionStartedData, StreamingEvent, StreamingEventType,
     StreamingGuardrailsConfig, TokenAllowedData, ViolationDetectedData,
+};
+
+// New streaming guardrail (token-by-token)
+pub use streaming::{
+    StreamingGuardrail,
+    StreamingGuardrailConfig,
+    StreamingGuardrailSession,
+    Violation,
+    ViolationError,
+    stream_with_guardrails as stream_with_guardrail,
 };
